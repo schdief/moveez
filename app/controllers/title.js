@@ -1,6 +1,7 @@
 var Title = require("../models/title"),
     mongoose = require("mongoose"),
-    HttpStatus = require("http-status-codes")
+    HttpStatus = require("http-status-codes"),
+	imdb = require("../imdb");
 
 //CREATE POST /title to add a new title
 function postTitle(req, res){
@@ -38,12 +39,16 @@ function getTitles(req, res){
             res.status(HttpStatus.NOT_FOUND)
                 .send(err)
         } else {
-            //respond with JSON when asked (for API calls and integration testing), otherwise render HTML
-            if(req.get('Accept') === "text/json"){
-                res.json(titles)
-            } else {
-                res.render("title/index", {titles: titles})
-            }
+			aImdbPromises = titles.map(oTitle => imdb.getRating(oTitle));
+			Promise.all(aImdbPromises).then(aValues => {
+				aValues.forEach((fRating, iIdx) => titles[iIdx].imdbRating = fRating);
+				//respond with JSON when asked (for API calls and integration testing), otherwise render HTML
+				if(req.get('Accept') === "text/json") {
+					res.json(titles)
+				} else {
+					res.render("title/index", {titles: titles})
+				}
+			})
         }
     })
 }
@@ -54,18 +59,21 @@ function getTitle(req, res){
     if(process.env.NODE_ENV !== "test"){
         console.log("metrics.getTitle")
     }
+    //respond with JSON when asked (for API calls and integration testing), otherwise redirect
+	if(req.get('Accept') !== "text/json"){
+        res.redirect("/title");
+		return;
+    }
     var query = Title.findById(req.params.id)
     query.exec((err, title) => {
         if(err) {
             res.status(HttpStatus.NOT_FOUND)
                 .send(err)
         } else {
-            //respond with JSON when asked (for API calls and integration testing), otherwise render HTML
-            if(req.get('Accept') === "text/json"){
-                res.json(title)
-            } else {
-                res.redirect("/title")
-            }
+			imdb.getRating(title).then(fRating=>{
+				title.imdbRating = fRating;
+                res.json(title);
+			});
         }
     })
 }
