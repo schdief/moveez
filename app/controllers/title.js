@@ -32,7 +32,7 @@ function getTitles(req, res){
     if(process.env.NODE_ENV !== "test"){
         console.log("metrics.getTitles")
     }
-    var query = Title.find({})
+    var query = Title.find(undefined, undefined, {sort:{createdAt:-1}});
     query.exec((err, titles) => {
         if(err) {
             res.status(HttpStatus.NOT_FOUND)

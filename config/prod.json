@@ -5,8 +5,5 @@
     "dbName": "",
     "dbHost": "",
     "dbUser": "",
-    "dbPassword" : "",
-    "dbConnectionOptions": {
-        "useMongoClient": true
-    }
+    "dbPassword" : ""
 }

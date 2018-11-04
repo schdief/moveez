@@ -12,16 +12,14 @@ chai.use(chaitHttp)
 describe("Moveez integration tests", () => {
 
     //TODO: should be beforeEach but then I'd need promises :S
-    before((done) => {
+    before(() => {
         //clean database
-        Title.collection.drop()
+        Title.collection.drop();
         //prepare database
-        var newTitle = new Title({
-            name: 'Inception'
-        })
-        newTitle.save({}, (err) => { 
-           done()         
-        })     
+        return Promise.all([
+            new Title({name: 'Inception'}).save(),
+            new Title({name: 'Peter Pan'}).save()
+        ]);
     })
 
     describe("Index", () => {
@@ -79,7 +77,7 @@ describe("Moveez integration tests", () => {
             }) 
         })
         describe("Read", () => {
-            it("it should GET the title list", (done) => {
+            it("it should GET the title list sorted descending by creation date", (done) => {
                 chai.request(app)
                     .get("/title")
                     .set('Accept', 'text/json')
@@ -87,9 +85,12 @@ describe("Moveez integration tests", () => {
                         res.should.have.status(200)
                         res.should.be.json
                         res.body.should.be.a('array')
-                        res.body[0].should.have.property('_id')
-                        res.body[0].should.have.property('name')
-                        res.body[0].name.should.equal('Inception')
+                        res.body[1].should.have.property('_id')
+                        res.body[1].should.have.property('name')
+                        res.body[1].name.should.equal('Peter Pan')
+                        res.body[2].should.have.property('_id')
+                        res.body[2].should.have.property('name')
+                        res.body[2].name.should.equal('Inception')
                         done()
                     })
             })

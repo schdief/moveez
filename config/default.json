@@ -4,8 +4,5 @@
     "dbName": "title_dev",
     "dbHost": "ds217092.mlab.com",
     "dbUser": "dev",
-    "dbPassword" : "dev123",
-    "dbConnectionOptions": {
-        "useMongoClient": true
-    }
+    "dbPassword" : "dev123"
 }
