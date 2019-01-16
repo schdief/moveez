@@ -4,7 +4,6 @@ import ReactDOM from "react-dom";
 import sBackgroundImageUrl from "./welcome_background.png";
 import sLogoUrl from "../logo.png";
 
-
 const LandingPage = ()=>{
     return (
         <div style={{
