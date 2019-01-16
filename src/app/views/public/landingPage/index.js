@@ -80,7 +80,7 @@ const SignupButton = ()=>{
         open("/title", "_self");
     };
     return (
-        <button className="ui button"onClick={fnOnClick}>Enter Moveez</button>
+        <button className="ui button teal"onClick={fnOnClick}>Enter Moveez</button>
     );
 };
 
