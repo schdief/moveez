@@ -35,7 +35,7 @@ const ContentBox = ()=>{
     return (
         <div style={{
             padding: "1rem",
-            backgroundColor: "rgba(200,200,200,0.8)",
+            backgroundColor: "rgba(27,27,27,0.85)",
             borderRadius: "1rem",
             display: "inline-block"}}>
             <Content/>
@@ -86,8 +86,10 @@ const MoveezIcon = () => {
 const BingeText = ()=>{
     return (
         <p style={{
-            fontSize: "5rem"
-        }}>manage your binge</p>
+            fontSize: "4rem",
+            color: "white",
+            marginBottom: "20px"
+        }}>manage your binge!</p>
     );
 };
 
@@ -96,7 +98,7 @@ const SignupButton = ()=>{
         open("/title", "_self");
     };
     return (
-        <button className="ui button teal" onClick={fnOnClick}>Enter Moveez</button>
+        <button className="ui labeled icon button teal" onClick={fnOnClick}><i class="icon play"></i>Enter Moveez</button>
     );
 };
 
