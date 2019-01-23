@@ -1,4 +1,4 @@
-FROM node:alpine
+FROM node
 LABEL maintainer="schdief.law@gmail.com"
 
 # making release name available for app to display
@@ -18,7 +18,6 @@ RUN mv ./dist/app ./app
 
 EXPOSE 443
 
-#//TODO: won't work since curl is missing in image
 # add healtcheck for auto-repair
 HEALTHCHECK --interval=5m --timeout=10s --retries=5 CMD curl --silent --fail localhost:443 || exit 1
 
