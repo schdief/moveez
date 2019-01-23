@@ -98,7 +98,7 @@ const SignupButton = ()=>{
         open("/title", "_self");
     };
     return (
-        <button className="ui labeled icon button teal" onClick={fnOnClick}><i class="icon play"></i>Enter Moveez</button>
+        <button id="enter" className="ui labeled icon button teal" onClick={fnOnClick}><i class="icon play"></i>Enter Moveez</button>
     );
 };
 
