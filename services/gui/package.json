@@ -6,10 +6,10 @@
   "scripts": {
     "babel": "babel src --out-dir dist --copy-files",
     "webpack": "webpack --config webpack.config.js",
-    "test": "PORT='8081' RELEASE='mocha test' nyc --reporter=lcov --reporter=text mocha 'test/integration/*.js' --timeout 20000 --full-trace",
+    "test": "PORT='8083' TLS_CRT_PATH='./sslcert/server.crt' TLS_KEY_PATH='./sslcert/server.key' FACEBOOK_APP_SECRET_PATH='./facebook/app_secret' SESSION_SECRET_PATH='./session/secret' RELEASE='mocha test' nyc --reporter=lcov --reporter=text mocha 'test/integration/*.js' --timeout 20000 --full-trace",
     "start": "cd app && NODE_CONFIG_DIR='../config' node app.js",
     "watch": "nodemon -e js,ejs,css --watch ./src --exec npm run dev",
-    "dev": "npm run babel && npm run webpack && cd ./dist/app && KETCHUP_ENDPOINT='localhost:8083' PORT='8081' NODE_CONFIG_DIR='../../config' node ./app.js",
+    "dev": "npm run babel && npm run webpack && cd ./dist/app && KETCHUP_ENDPOINT='localhost:8083' PORT='8083' TLS_CRT_PATH='../../sslcert/server.crt' TLS_KEY_PATH='../../sslcert/server.key' FACEBOOK_APP_SECRET_PATH='../../facebook/app_secret' SESSION_SECRET_PATH='../../session/secret' NODE_CONFIG_DIR='../../config' node ./app.js",
     "cy:open": "cypress open",
     "cy:verify": "cypress verify",
     "uat": "cypress run"
@@ -31,6 +31,7 @@
     "ajv": "^6.9.1",
     "body-parser": "^1.18.2",
     "config": "^1.29.0",
+    "connect-ensure-login": "^0.1.1",
     "connect-flash": "^0.1.1",
     "cookie-parser": "^1.4.3",
     "ejs": "^2.5.7",
@@ -40,7 +41,9 @@
     "method-override": "^2.3.10",
     "mongoose": "5",
     "morgan": "^1.9.0",
-    "superagent": "^4.1.0"
+    "superagent": "^4.1.0",
+    "passport": "^0.4.0",
+    "passport-facebook": "^3.0.0"
   },
   "devDependencies": {
     "@babel/cli": "^7.1.2",
@@ -59,6 +62,7 @@
     "nyc": "^11.4.1",
     "react": "^16.6.3",
     "react-dom": "^16.6.3",
+    "sinon": "^7.2.7",
     "webpack": "^4.26.0",
     "webpack-cli": "^3.1.2"
   },

@@ -6,6 +6,11 @@ package-lock.json
 cypress/fixtures/
 cypress/plugins/
 cypress/screenshots/
+cypress/support/
 cypress/videos/
 dist/
+sslcert/
+facebook/
+session/
 .idea/
+.DS_Store

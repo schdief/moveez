@@ -1,4 +1,8 @@
 process.env.NODE_ENV = 'test'
+const sinon = require('sinon');
+const connect = require('connect-ensure-login');
+
+sinon.replace(connect, "ensureLoggedIn", ()=>(req, resp, next)=>next());
 
 var chai = require("chai"),
     chaitHttp = require("chai-http"),

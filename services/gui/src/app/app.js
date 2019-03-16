@@ -1,6 +1,10 @@
 //DEPENDENCIES
+const session = require('./session');
+const login = require('./login');
+const https = require('https');
+const fs = require('fs');
+const connect = require('connect-ensure-login');
 var express = require("express"),
-    app = express(),
     morgan = require("morgan"),
     title = require("./controllers/title"),
     landingPage = require("./controllers/landingPage"),
@@ -8,9 +12,16 @@ var express = require("express"),
     mongoose = require("mongoose"),
     methodOverride = require("method-override"),
     flash = require("connect-flash"),
-    session = require('express-session'),
     cookieParser = require('cookie-parser'),
     config = require("config") //load database configuration from config file
+
+//PARAMETERS
+const TLS_KEY_PATH = process.env.TLS_KEY_PATH;
+const TLS_CRT_PATH = process.env.TLS_CRT_PATH;
+const PORT = process.env.PORT || 443; //PORT is defined by environment variable or 443
+
+// create express application
+const app = express();
 
 //LOGGING
 //don't show log when it is test
@@ -36,9 +47,14 @@ app.use(bodyParser.json({type: "application/json"}))
 //allow PUT in HTML Form action
 app.use(methodOverride("_method"))
 
+// setup session
+session.initialize(app);
+
+// setup facebook login
+login.initialize(app, PORT);
+
 //enable flash messages
 app.use(cookieParser('secret'));
-app.use(session({cookie: { maxAge: 60000 }}));
 app.use(flash())
 app.use((req, res, next) => {
     res.locals.success = req.flash("success")
@@ -55,7 +71,7 @@ app.use(express.static("views/public"))
 app.get("/", landingPage.landingPage);
 //title RESTful routes
 app.route("/title")
-    .get(title.getTitles)
+    .get(connect.ensureLoggedIn("/"), title.getTitles)
     .post(title.postTitle)
 app.route("/title/:id")
     .get(title.getTitle)
@@ -63,14 +79,14 @@ app.route("/title/:id")
     .delete(title.deleteTitle)
 
 //SERVER
-//PORT is defined by environment variable or 80
-const PORT = process.env.PORT || 80
 const HOST = '0.0.0.0'
 const MODE = process.env.NODE_ENV || "default"
 const RELEASE = process.env.RELEASE || "snapshot"
-app.listen(PORT, HOST, () => {
+const privateKey  = fs.readFileSync(TLS_KEY_PATH, 'utf8');
+const certificate = fs.readFileSync(TLS_CRT_PATH, 'utf8');
+https.createServer({key:privateKey, cert:certificate}, app).listen(PORT, HOST, () => {
     console.log("🍿🍿🍿 MOVEEZ - manage your binge!")
-    console.log(RELEASE + " started on " + HOST + ":" + PORT)
+    console.log(`${RELEASE} started with TLS on ${HOST}:${PORT}`);
     console.log("mode: " + MODE)
     console.log("db: " + dbConnectionString)
     console.log(`ketchup: ${process.env.KETCHUP_ENDPOINT}`)
