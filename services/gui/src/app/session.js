@@ -1,11 +1,8 @@
 const session = require('express-session');
-const fs = require('fs');
-
-const SESSION_SECRET_PATH = process.env.SESSION_SECRET_PATH;
 
 const initialize = app => {
-    const sessionSecret = fs.readFileSync(SESSION_SECRET_PATH, 'utf8');
-
+    // TODO: make sessions and secret persistent across nodes
+    const sessionSecret = Math.random().toString(36).substring(2, 15);
     app.use(session({
         secure: true,
         secret: sessionSecret,

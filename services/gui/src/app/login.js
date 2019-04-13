@@ -5,10 +5,16 @@ const fs = require('fs');
 
 const UAT_MODE = process.env.NODE_ENV === "uat";
 const FACEBOOK_APP_ID = 320908101860577;
+const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
 const FACEBOOK_APP_SECRET_PATH = process.env.FACEBOOK_APP_SECRET_PATH;
 
 const initialize = (app, port) => {
-    const fbAppSecret = fs.readFileSync(FACEBOOK_APP_SECRET_PATH, 'utf8');
+    let fbAppSecret;
+    if (FACEBOOK_APP_SECRET) {
+        fbAppSecret = FACEBOOK_APP_SECRET
+    } else if (FACEBOOK_APP_SECRET_PATH) {
+        fbAppSecret = fs.readFileSync(FACEBOOK_APP_SECRET_PATH, 'utf8');
+    }
 
     const facebookStrategy = new FacebookStrategy(
         {

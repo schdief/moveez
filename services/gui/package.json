@@ -6,10 +6,11 @@
   "scripts": {
     "babel": "babel src --out-dir dist --copy-files",
     "webpack": "webpack --config webpack.config.js",
-    "test": "PORT='8443' TLS_CRT_PATH='./sslcert/server.crt' TLS_KEY_PATH='./sslcert/server.key' FACEBOOK_APP_SECRET_PATH='./facebook/app_secret' SESSION_SECRET_PATH='./session/secret' RELEASE='mocha test' nyc --reporter=lcov --reporter=text mocha 'test/integration/*.js' --timeout 20000 --full-trace",
+    "test": "PORT='8082' RELEASE='mocha test' nyc --reporter=lcov --reporter=text mocha 'test/integration/*.js' --timeout 20000 --full-trace",
     "start": "cd app && NODE_CONFIG_DIR='../config' node app.js",
     "watch": "nodemon -e js,ejs,css --watch ./src --exec npm run dev",
-    "dev": "npm run babel && npm run webpack && cd ./dist/app && KETCHUP_ENDPOINT='localhost:8083' PORT='8443' TLS_CRT_PATH='../../sslcert/server.crt' TLS_KEY_PATH='../../sslcert/server.key' FACEBOOK_APP_SECRET_PATH='../../facebook/app_secret' SESSION_SECRET_PATH='../../session/secret' NODE_CONFIG_DIR='../../config' node ./app.js",
+    "dev": "npm run babel && npm run webpack && cd ./dist/app && KETCHUP_ENDPOINT='localhost:8083' PORT='8443' TLS_CRT_PATH='../../sslcert/server.crt' TLS_KEY_PATH='../../sslcert/server.key' FACEBOOK_APP_SECRET_PATH='../../facebook/app_secret' NODE_CONFIG_DIR='../../config' node ./app.js",
+    "forUat": "cd ./dist/app && KETCHUP_ENDPOINT='localhost:8083' PORT='8081' NODE_CONFIG_DIR='../../config' NODE_ENV='uat' node ./app.js",
     "cy:open": "cypress open",
     "cy:verify": "cypress verify",
     "uat": "cypress run"
