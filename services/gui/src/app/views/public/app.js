@@ -37,7 +37,7 @@ function toggleSeenStatus(id, name, seen) {
 //suggestions from IMDB for adding a new title
 //Define API endpoints once globally
 $.fn.api.settings.api = {
-    'search' : 'http://www.omdbapi.com/?s={value}&apikey=b50af808'
+    'search' : 'https://www.omdbapi.com/?s={value}&apikey=b50af808'
 };
 $('.search input')
   .api({
@@ -76,7 +76,7 @@ function addTitle(name, imdbID, year, poster) {
         }
     }
 
-    ratingRequest.open("GET", "http://www.omdbapi.com/?i=" + imdbID + "&apikey=b50af808&tomatoes=true")
+    ratingRequest.open("GET", "https://www.omdbapi.com/?i=" + imdbID + "&apikey=b50af808&tomatoes=true")
     ratingRequest.send()
 }
 

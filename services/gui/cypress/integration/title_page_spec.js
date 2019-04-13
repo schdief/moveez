@@ -15,11 +15,17 @@
 }) */
 
 describe('The Title Page', function() {
+  beforeEach(()=>{
+    Cypress.Cookies.preserveOnce('connect.sid');
+  })
+  it('can login', function() {
+    cy.visit("/login", {method:"POST", auth: {username:"cypress", password:"cypress"}});
+  })
   it('successfully loads', function() {
     cy.visit('/title') // change URL to match your dev URL
   })
   //TODO: check version
-})
+  
 
 describe('Adding a Title', function() {
   it('is aided by a suggestion from iMDB when typing', function() {
@@ -83,4 +89,5 @@ describe('Deleting a Title', function() {
   it('results in a deleted entry', function() {
       cy.get('.content').should('not.contain', 'Inception')
   })
+})
 })

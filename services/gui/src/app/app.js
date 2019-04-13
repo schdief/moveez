@@ -69,9 +69,10 @@ app.use(express.static("views/public"))
 //ROUTES
 //index
 app.get("/", landingPage.landingPage);
+app.all("*", connect.ensureLoggedIn("/"));
 //title RESTful routes
 app.route("/title")
-    .get(connect.ensureLoggedIn("/"), title.getTitles)
+    .get(title.getTitles)
     .post(title.postTitle)
 app.route("/title/:id")
     .get(title.getTitle)
