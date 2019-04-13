@@ -69,6 +69,11 @@ const initialize = (app, port) => {
             res.redirect('/title');
         }
     );
+
+    app.get('/logout', function(req, res){
+        req.logout();
+        res.redirect('/');
+      });
 }
 
 module.exports = {initialize};

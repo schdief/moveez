@@ -90,4 +90,13 @@ describe('Deleting a Title', function() {
       cy.get('.content').should('not.contain', 'Inception')
   })
 })
+
+  describe('logout button', ()=>{
+    it('can logout', ()=>{
+      cy.get('#logout').click();
+      cy.url().should('eq', Cypress.config().baseUrl + '/'); // leads to home page
+      cy.visit('/title'); // can't reenter without login...
+      cy.url().should('eq', Cypress.config().baseUrl + '/'); // and leads to home page again
+    });
+  });
 })
