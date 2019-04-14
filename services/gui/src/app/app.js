@@ -95,9 +95,11 @@ if (MODE === "default") {
         console.log(`ketchup: ${process.env.KETCHUP_ENDPOINT}`)
     })  
 } else {
+    //on uat and prod
     app.listen(PORT, () => {
         console.log("🍿🍿🍿 MOVEEZ - manage your binge!")
-        console.log(`${RELEASE} started on ${HOST}:${PORT}`);
+        //TODO: improve port definition, override here is nasty
+        console.log(`${RELEASE} started on ${HOST}:80`);
         console.log("mode: " + MODE)
         console.log("db: " + dbConnectionString)
         console.log(`ketchup: ${process.env.KETCHUP_ENDPOINT}`)
