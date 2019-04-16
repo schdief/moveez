@@ -18,7 +18,7 @@ var express = require("express"),
 //PARAMETERS
 const TLS_KEY_PATH = process.env.TLS_KEY_PATH;
 const TLS_CRT_PATH = process.env.TLS_CRT_PATH;
-const PORT = process.env.PORT || 443; //PORT is defined by environment variable or 443
+const PORT = process.env.PORT || 80; //PORT is defined by environment variable or 80
 
 // create express application
 const app = express();
@@ -98,8 +98,7 @@ if (MODE === "default") {
     //on uat and prod
     app.listen(PORT, () => {
         console.log("🍿🍿🍿 MOVEEZ - manage your binge!")
-        //TODO: improve port definition, override here is nasty
-        console.log(`${RELEASE} started on ${HOST}:80`);
+        console.log(`${RELEASE} started on ${HOST}:${PORT}`);
         console.log("mode: " + MODE)
         console.log("db: " + dbConnectionString)
         console.log(`ketchup: ${process.env.KETCHUP_ENDPOINT}`)
