@@ -7,7 +7,7 @@ services/gui/cypress/plugins/
 services/gui/cypress/screenshots/
 services/gui/cypress/videos/
 dist/
-services/gui/sslcert/
+services/gui/tlscert/
 services/gui/facebook/
 services/gui/session/
 .idea/
