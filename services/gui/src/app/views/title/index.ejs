@@ -33,7 +33,11 @@
                                 <span>
                                     <i class="imdb icon"></i>
                                     <p class="inline">
-                                        <%= title.imdbRating %>
+                                        <% if(title.imdbRating === -1) { %>
+                                            - %
+                                        <% } else { %>
+                                            <%= title.imdRating %> %
+                                        <% } %>
                                     </p>
                                 </span>
                                 <span>

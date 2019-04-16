@@ -13,9 +13,13 @@ function postTitle(req, res){
 
     var newTitle = new Title(req.body.title)
 
-    //TODO: use dynamic name and port for ketchup-service
+    //some titles have no imdbRating, we need to avoid crashing the db (#59)
+    if(!newTitle.imdbRating) {
+        newTitle.imdbRating = -1
+    }
+
     //TODO: switch to https (self-signed)
-    //TODO: check tomatoURL upfront, if empty skip ketchup request
+    //TODO: check tomatoURL upfront, if empty skip ketchup request - needs promises
     //get path of tomatoURL
     var path
     if(req.body.title.tomatoURL){
@@ -33,6 +37,7 @@ function postTitle(req, res){
 
             newTitle.save((err, title) => {
                 if(err) {
+                    console.error(err)
                     res.status(HttpStatus.NOT_FOUND)
                       .send(err)
                 } else {
