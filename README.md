@@ -12,12 +12,6 @@ Future updates might include:
 
 ![Screenshot](https://github.com/schdief/moveez/blob/master/screenshot.png)
 
-# Development
-* `npm install` to install dependencies
-* `npm run dev` to start app locally
-* `npm test` to run integration tests locally
-* `npm run cy:open` to open cypress.io to manage acceptance tests
-
 ## CI/CD with Azure DevOps
 We have switched from Jenkins to Azure DevOps. You can find the workspace [here](https://dev.azure.com/Schdieflaw0018/moveez/).
 Within Azure DevOps we are using Azure Pipelines to build and release moveez.
