@@ -13,7 +13,8 @@ var TitleSchema = new Schema(
         imdbID: {type: String},
         year: {type: String},
         tomatoUserRating: {type: Number},
-        tomatoURL: {type: String}
+        tomatoURL: {type: String},
+        user: {type: String}
     }
 )
 

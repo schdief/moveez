@@ -11,7 +11,7 @@ function postTitle(req, res){
         console.log("metrics.postTitle")
     }
 
-    var newTitle = new Title(req.body.title)
+    var newTitle = new Title({...req.body.title, user: req.user});
 
     //TODO: use dynamic name and port for ketchup-service
     //TODO: switch to https (self-signed)
@@ -56,7 +56,7 @@ function getTitles(req, res){
     if(process.env.NODE_ENV !== "test"){
         console.log("metrics.getTitles")
     }
-    var query = Title.find(undefined, undefined, {sort:{createdAt:-1}});
+    var query = Title.find({user:req.user}, undefined, {sort:{createdAt:-1}});
     query.exec((err, titles) => {
         if(err) {
             res.status(HttpStatus.NOT_FOUND)
@@ -78,9 +78,9 @@ function getTitle(req, res){
     if(process.env.NODE_ENV !== "test"){
         console.log("metrics.getTitle")
     }
-    var query = Title.findById(req.params.id)
+    var query = Title.findOne({ _id: req.params.id, user: req.user });
     query.exec((err, title) => {
-        if(err) {
+        if(err || !title) {
             res.status(HttpStatus.NOT_FOUND)
                 .send(err)
         } else {
@@ -102,9 +102,9 @@ function updateTitle(req, res){
     }
     //check for name in body
     if(req.body.title.name !== "") {
-        var query = Title.findByIdAndUpdate(req.params.id, req.body.title, {new: true})
+        var query = Title.findOneAndUpdate({ _id: req.params.id, user: req.user }, {...req.body.title, user: req.user}, {new: true})
         query.exec((err, updatedTitle) => {
-            if(err) {
+            if(err || !updatedTitle) {
                 res.status(HttpStatus.NOT_FOUND)
                     .send(err)
             } else {
@@ -143,9 +143,9 @@ function deleteTitle(req, res){
     if(process.env.NODE_ENV !== "test"){
         console.log("metrics.deleteTitle")
     }
-    var query = Title.findByIdAndRemove(req.params.id, req.body.title)
+    var query = Title.findOneAndRemove({ _id: req.params.id, user: req.user }, req.body.title)
     query.exec((err, deletedTitle) => {
-        if(err) {
+        if(err || !deletedTitle) {
             res.status(HttpStatus.NOT_FOUND)
                 .send(err)
         } else {

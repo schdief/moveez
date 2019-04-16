@@ -1,8 +1,15 @@
 process.env.NODE_ENV = 'test'
 const sinon = require('sinon');
 const connect = require('connect-ensure-login');
-
-sinon.replace(connect, "ensureLoggedIn", ()=>(req, resp, next)=>next());
+const testUser = "mocha";
+sinon.replace(
+    connect,
+    "ensureLoggedIn",
+    ()=>(req, resp, next)=>{
+        req.user = testUser;
+        next();
+    }
+);
 
 var chai = require("chai"),
     chaitHttp = require("chai-http"),
@@ -21,8 +28,8 @@ describe("Moveez integration tests", () => {
         Title.collection.drop();
         //prepare database
         return Promise.all([
-            new Title({name: 'Inception'}).save(),
-            new Title({name: 'Peter Pan'}).save()
+            new Title({name: 'Inception', user: testUser}).save(),
+            new Title({name: 'Peter Pan', user: testUser}).save()
         ]);
     })
 
@@ -101,7 +108,8 @@ describe("Moveez integration tests", () => {
             })
             it("it should GET a title", (done) => {
                 var newTitle = new Title({
-                    name:"Inception"
+                    name:"Inception",
+                    user: testUser
                 })
                 newTitle.save((err, title) => {          
                     chai.request(app)
@@ -119,6 +127,42 @@ describe("Moveez integration tests", () => {
                         })
                 })     
             })
+
+            it("should not list titles of someone else", (done) => {
+                var newTitle = new Title({
+                    name:"Inception",
+                    user: "otherUser"
+                });
+                newTitle.save((err, title) => {          
+                    chai.request(app)
+                    .get("/title")
+                        .set('Accept', 'application/json')
+                        .end((err, res) => {
+                            res.should.have.status(200);
+                            res.should.be.json;
+                            res.body.should.be.a('array');
+                            containsNewTitle = res.body.some((t)=>(t._id == title._id));
+                            containsNewTitle.should.equal(false);
+                            done();
+                        });
+                });
+            });
+
+            it("should not GET a title of someone else", (done) => {
+                var newTitle = new Title({
+                    name:"Inception",
+                    user: "otherUser"
+                });
+                newTitle.save((err, title) => {          
+                    chai.request(app)
+                        .get("/title/"+title.id)
+                        .set('Accept', 'application/json')
+                        .end((err, res) => {
+                            res.should.have.status(404);
+                            done();
+                        });
+                });
+            });
         })
         describe("Update", () => {
             it("it should not PUT an update without name", (done) => {
@@ -144,6 +188,28 @@ describe("Moveez integration tests", () => {
                             })
                     }) 
             })
+
+            it("should not PUT an update for someone else", (done) => {
+                var newTitle = new Title({
+                    name:"Inception",
+                    user: "otherUser"
+                });
+                newTitle.save((err, title) => {          
+                    chai.request(app)
+                        .put("/title/"+title.id)
+                        .set('Accept', 'application/json')
+                        .send({
+                            title: {
+                                name:"Inception 2"
+                            }
+                        })
+                        .end((err, res) => {
+                            res.should.have.status(404);
+                            done();
+                        });
+                });
+            });
+
             it("it should PUT an update with ID and name", (done) => {
                 chai.request(app)
                     .get("/title")
@@ -259,6 +325,23 @@ describe("Moveez integration tests", () => {
                             })
                     })
             })
+
+            it("should not DELETE a title of someone else", (done) => {
+                var newTitle = new Title({
+                    name:"Inception",
+                    user: "otherUser"
+                });
+                newTitle.save((err, title) => {          
+                    chai.request(app)
+                        .delete("/title/"+title.id)
+                        .set('Accept', 'application/json')
+                        .end((err, res) => {
+                            res.should.have.status(404);
+                            done();
+                        });
+                });
+            });
+
         })
     })
 })
