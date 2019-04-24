@@ -52,7 +52,7 @@ mongoose.connect(dbConnectionString, {
       password: dbPassword
     },
     useNewUrlParser: true,
-    authSource: config.dbName
+    authSource: "admin"
   })
   .then(() => console.log('connection to db successful'))
   .catch((err) => console.log(err));
