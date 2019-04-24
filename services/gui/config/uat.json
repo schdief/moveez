@@ -1,7 +1,7 @@
 {
-    "dbPort": "47290",
-    "dbName": "title_uat",
-    "dbHost": "ds247290.mlab.com",
-    "dbUser": "uat",
-    "dbPassword" : "uat123"
+    "dbPort": "27017",
+    "dbName": "my-database",
+    "dbHost": "my-release-mongodb",
+    "dbUser": "my-user",
+    "dbPassword" : "my-password"
 }
