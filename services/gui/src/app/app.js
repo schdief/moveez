@@ -42,15 +42,16 @@ if(process.env.NODE_ENV === "prod") {
 } else {
     //since UAT and PROD share the same deployment config, UAT would use the PROD password from env
     dbPassword = config.dbPassword
-    //mlab might require those connection string details
-    dbConnectionString += `?authSource=${config.dbName}&w=1`
+    //mlab might need explizit SCRAM-SHA-1 auth method
+    dbConnectionString += "?authMechanism=SCRAM-SHA-1"
 }
 
 mongoose.connect(dbConnectionString, {
     auth: {
       user: dbUser,
       password: dbPassword
-    }
+    },
+    useNewUrlParser: true
   })
   .then(() => console.log('connection to db successful'))
   .catch((err) => console.log(err));
