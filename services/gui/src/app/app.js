@@ -42,6 +42,7 @@ if(process.env.NODE_ENV === "prod") {
 } else {
     //since UAT and PROD share the same deployment config, UAT would use the PROD password from env
     dbPassword = config.dbPassword
+    console.log("set PW")
 }
 
 mongoose.connect(dbConnectionString, {
@@ -108,7 +109,7 @@ if (MODE === "default") {
         console.log("🍿🍿🍿 MOVEEZ - manage your binge!")
         console.log(`${RELEASE} started with TLS on ${HOST}:${PORT}`);
         console.log("mode: " + MODE)
-        console.log(`db: ${dbConnectionString}`)
+        console.log(`db: ${dbConnectionString} with ${dbPassword}`)
         console.log(`ketchup: ${process.env.KETCHUP_ENDPOINT}`)
     })  
 } else {
