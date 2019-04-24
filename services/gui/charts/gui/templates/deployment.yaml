@@ -35,3 +35,8 @@ spec:
             secretKeyRef:
               name: moveez-prod-db
               key: dbpass
+        - name: FACEBOOK_APP_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: moveez-prod-facebook
+              key: appsecret

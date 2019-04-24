@@ -27,6 +27,7 @@ const Content = ()=>{
             <MoveezIcon/>
             <BingeText/>
             <SignupButton/>
+            <GDPR/>
         </div>
     );
 };
@@ -95,10 +96,19 @@ const BingeText = ()=>{
 
 const SignupButton = ()=>{
     const fnOnClick = ()=>{
-        open("/title", "_self");
+        open("/auth/facebook", "_self");
     };
     return (
-        <button id="enter" className="ui labeled icon button teal" onClick={fnOnClick}><i class="icon play"></i>Enter Moveez</button>
+        <button id="enter" className="ui labeled icon facebook button" onClick={fnOnClick}>Login <i class="facebook icon"></i></button>
+    );
+};
+
+const GDPR = ()=>{
+    return (
+        <p style={{
+            color: "white",
+            marginTop: "20px"
+        }}>You consent to our <a id="gdpr" href="/impressum">data privacy statement</a> by logging in.</p>
     );
 };
 
