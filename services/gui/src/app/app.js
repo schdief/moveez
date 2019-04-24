@@ -51,7 +51,9 @@ mongoose.connect(dbConnectionString, {
       user: dbUser,
       password: dbPassword
     },
-    useNewUrlParser: true
+    useNewUrlParser: true,
+    authSource: config.dbName,
+    loggerLevel: debug
   })
   .then(() => console.log('connection to db successful'))
   .catch((err) => console.log(err));
