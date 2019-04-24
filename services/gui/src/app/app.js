@@ -102,7 +102,7 @@ if (MODE === "default") {
         console.log("🍿🍿🍿 MOVEEZ - manage your binge!")
         console.log(`${RELEASE} started with TLS on ${HOST}:${PORT}`);
         console.log("mode: " + MODE)
-        console.log("db: " + dbConnectionString)
+        console.log(`db: ${dbConnectionString}`)
         console.log(`ketchup: ${process.env.KETCHUP_ENDPOINT}`)
     })  
 } else {
@@ -111,7 +111,7 @@ if (MODE === "default") {
         console.log("🍿🍿🍿 MOVEEZ - manage your binge!")
         console.log(`${RELEASE} started on ${HOST}:${PORT}`);
         console.log("mode: " + MODE)
-        console.log("db: " + dbConnectionString)
+        console.log(`db: ${dbConnectionString} + ${dbUser} + ${dbPassword}`)
         console.log(`ketchup: ${process.env.KETCHUP_ENDPOINT}`)
     })  
 }
