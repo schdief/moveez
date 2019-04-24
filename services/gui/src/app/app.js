@@ -33,10 +33,16 @@ if(process.env.NODE_ENV !== "test"){
 
 //DATABASE
 const dbUser = process.env.DB_USER || config.dbUser
-const dbPassword = process.env.DB_PASS || config.dbPassword
+const dbPassword
 var dbConnectionString = config.dbProtocol + "://" + config.dbHost + ":" + config.dbPort + "/" + config.dbName
-//CosmosDB requires ssl=true
-if(process.env.NODE_ENV === "prod") dbConnectionString += "?ssl=true&replicaSet=globaldb"
+if(process.env.NODE_ENV === "prod") {
+    //CosmosDB requires ssl=true
+    dbConnectionString += "?ssl=true&replicaSet=globaldb"
+    dbPassword = process.env.DB_PASS
+} else {
+    //since UAT and PROD share the same deployment config, UAT would use the PROD password from env
+    dbPassword = config.dbPassword
+}
 
 mongoose.connect(dbConnectionString, {
     auth: {
@@ -111,7 +117,7 @@ if (MODE === "default") {
         console.log("🍿🍿🍿 MOVEEZ - manage your binge!")
         console.log(`${RELEASE} started on ${HOST}:${PORT}`);
         console.log("mode: " + MODE)
-        console.log(`db: ${dbConnectionString} + ${dbUser} + ${dbPassword}`)
+        console.log(`db: ${dbConnectionString}`)
         console.log(`ketchup: ${process.env.KETCHUP_ENDPOINT}`)
     })  
 }
