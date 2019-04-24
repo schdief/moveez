@@ -33,7 +33,7 @@ if(process.env.NODE_ENV !== "test"){
 
 //DATABASE
 const dbUser = process.env.DB_USER || config.dbUser
-const dbPassword
+let dbPassword
 var dbConnectionString = config.dbProtocol + "://" + config.dbHost + ":" + config.dbPort + "/" + config.dbName
 if(process.env.NODE_ENV === "prod") {
     //CosmosDB requires ssl=true
