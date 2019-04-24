@@ -4,6 +4,7 @@ const LocalStrategy = require('passport-http').BasicStrategy;
 const fs = require('fs');
 
 const UAT_MODE = process.env.NODE_ENV === "uat";
+const DEV_MODE = !process.env.NODE_ENV;
 const FACEBOOK_APP_ID = 320908101860577;
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
 const FACEBOOK_APP_SECRET_PATH = process.env.FACEBOOK_APP_SECRET_PATH;
@@ -20,7 +21,7 @@ const initialize = (app, port) => {
         {
             clientID: FACEBOOK_APP_ID,
             clientSecret: fbAppSecret,
-            callbackURL: `https://www.moveez.de/auth/facebook/callback`
+            callbackURL: DEV_MODE ? `https://localhost:${port}/auth/facebook/callback` : "https://www.moveez.de/auth/facebook/callback"
         },
         function(accessToken, refreshToken, profile, done) {
               done(null, profile.id);
