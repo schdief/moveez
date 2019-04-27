@@ -20,6 +20,12 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
         - containerPort: 80
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 30
         env:
         - name: KETCHUP_ENDPOINT
           value: 'ketchup-{{ template "branchName" . }}-{{ .Values.stage }}'
