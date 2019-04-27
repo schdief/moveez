@@ -45,3 +45,10 @@ steps:
 - bash: az acr helm push -n $(registryName) -u $(registryLogin) -p $(registryPassword) $(build.artifactStagingDirectory)/$(projectName)_$(build.sourceBranchName)-$(build.buildNumber).tgz
   displayName: 'az acr helm push'
   #condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+
+- task: PublishPipelineArtifact@0
+  displayName: 'Store Cypress Tests'
+  inputs:
+    artifactName: '$(Build.BuildId)_cypress'
+    targetPath: service/gui/cypress
+
