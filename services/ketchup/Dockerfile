@@ -32,9 +32,11 @@ COPY . .
 
 EXPOSE 80
 
-#TODO: install curl
+#install curl for healthcheck
+RUN apk --no-cache add curl  
+
 # add healtcheck for auto-repair
-#HEALTHCHECK --interval=5m --timeout=10s --retries=5 CMD curl --silent --fail localhost:8080 || exit 1
+HEALTHCHECK --interval=5m --timeout=10s --retries=5 CMD curl --silent --fail localhost:80 || exit 1
 
 # start moveez
 CMD [ "npm", "start" ]

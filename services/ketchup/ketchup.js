@@ -13,6 +13,13 @@ if(process.env.NODE_ENV !== "test"){
     app.use(morgan("combined"))
 }
 
+//healtcheck
+app.get('/health', function (req, res) {
+    res.status(HttpStatus.OK)
+    res.send()
+})
+
+//nothing to look for
 app.get('/', function (req, res) {
     res.redirect("/empty")
 })

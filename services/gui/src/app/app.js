@@ -88,6 +88,11 @@ app.use(express.static("views/public"))
 //ROUTES
 //index
 app.get("/", landingPage.landingPage);
+//healtcheck
+app.get('/health', function (req, res) {
+    res.status(HttpStatus.OK)
+    res.send()
+})
 app.get("/impressum", impressum.impressum);
 app.all("*", connect.ensureLoggedIn("/"));
 //title RESTful routes
