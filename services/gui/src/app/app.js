@@ -32,18 +32,18 @@ if(process.env.NODE_ENV !== "test"){
 }
 
 //DATABASE
-const dbUser = process.env.DB_USER || config.dbUser
+let dbUser
 let dbPassword
 var dbConnectionString = config.dbProtocol + "://" + config.dbHost + ":" + config.dbPort + "/" + config.dbName
 if(process.env.NODE_ENV === "prod") {
     //CosmosDB requires ssl=true
     dbConnectionString += "?ssl=true&replicaSet=globaldb"
     dbPassword = process.env.DB_PASS
+    dbUser = process.env.DB_USER
 } else {
     //since UAT and PROD share the same deployment config, UAT would use the PROD password from env
     dbPassword = config.dbPassword
-    //mlab might need explizit SCRAM-SHA-1 auth method
-    dbConnectionString += "?authMechanism=SCRAM-SHA-1"
+    dbUser = config.dbUser
 }
 
 mongoose.connect(dbConnectionString, {
