@@ -1,7 +1,7 @@
 {
     "dbPort": "27017",
-    "dbName": "my-database",
-    "dbHost": "my-release-mongodb",
-    "dbUser": "my-user",
-    "dbPassword" : "my-password"
+    "dbName": "uat",
+    "dbHost": "mongodb-moveez-uat",
+    "dbUser": "uat",
+    "dbPassword" : "uat"
 }

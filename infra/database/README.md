@@ -1,8 +1,16 @@
 # Database
 In general we are using MongoDB as a database, because we hate SQL :)
 
-## DEV and UAT
-For our non-productive environments we use [mlab.com](https://mlab.com) and their sandbox environments. The configuration can be seen in `services/gui/config/default.json` (for DEV) or `/uat.json`.
+## DEV/TEST
+For our dev and test environments we use [mlab.com](https://mlab.com) and their sandbox environments. The configuration can be seen in `services/gui/config/default.json` (for DEV) or `/test.json` (for TEST).
+
+## UAT
+For UAT we use a (currently single) local MongoDB on AKS. Set it up with the [helm chart](https://github.com/helm/charts/tree/master/stable/mongodb):
+```
+helm install --name mongodb-moveez-uat \
+    --set mongodbRootPassword=uat,mongodbUsername=uat,mongodbPassword=uat,mongodbDatabase=uat,persistence.size=8Mi\
+    stable/mongodb
+```
 
 ## PROD
 In production we use Azures `CosmosDB` because it should be highly reliable, has automatic backups and should be easy to use by having an attractive price point (we'll see about that).
