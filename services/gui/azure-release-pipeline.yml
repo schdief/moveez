@@ -1,4 +1,4 @@
-//waiting for https://dev.azure.com/mseng/AzureDevOpsRoadmap/_workitems/edit/1364226/
+#waiting for https://dev.azure.com/mseng/AzureDevOpsRoadmap/_workitems/edit/1364226/
 variables:
   registryName: 'moveez'
   registryLogin: ''
@@ -81,3 +81,9 @@ steps:
     failTaskOnFailedTests: true
     testRunTitle: 'Cypress Test Results'
   condition: succeededOrFailed()
+
+- bash: |
+   # perform loadtest with octoperf (only if master branch)
+   curl --header "Authorization: Bearer $(octoperfAPIKey)" -v -X POST https://api.octoperf.com/runtime/scenarios/run/AWpj8NlL1jJrtCxKoxZ7
+  displayName: 'Perform Octoperf Loadtest'
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))

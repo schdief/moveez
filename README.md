@@ -12,11 +12,17 @@ Future updates might include:
 
 ![Screenshot](https://github.com/schdief/moveez/blob/master/screenshot.jpg)
 
-## CI/CD with Azure DevOps
+# CI/CD with Azure DevOps
 We have switched from Jenkins to Azure DevOps. You can find the workspace [here](https://dev.azure.com/Schdieflaw0018/moveez/).
 Within Azure DevOps we are using Azure Pipelines to build and release moveez.
-* The build configuration is done via `azure-pipelines.yml` per service.
-* The release is currently configured in GUI due to lack of support of release config files.
+* The build configuration is done via `azure-build-pipeline.yml` per service.
+* The release is currently configured in GUI due to [lack of support of release config files](https://dev.azure.com/mseng/AzureDevOpsRoadmap/_workitems/edit/1364226/). Nevertheless we already store the release config in `azure-release-pipeline.yaml`.
+
+## Regression testing with CYPRESS
+We use cypress.io to perform our regression testing. It is automaticly triggered for all branches on UAT stage after the deployment. The results are published to a [dashboard](https://dashboard.cypress.io/#/projects/dhwwh4/runs).
+
+## Load testing with OCTOPERF
+We use octoperf.com to perform our load testing. It is automaticly triggered for `master` on UAT stage after the deployment. The results are published to a [dashboard](https://app.octoperf.com/#/app/workspace/AWDOItVk8EjRy3SNXm7S/project/AWn9_QbVnBB5lYSBzoW2/analysis).
 
 # Stack
 This app consists of multiple microservices, all based on [Express](https://expressjs.com/). They can be found in the `services` directory.
