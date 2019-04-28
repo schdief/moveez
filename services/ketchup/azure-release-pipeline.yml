@@ -1,3 +1,4 @@
+//waiting for https://dev.azure.com/mseng/AzureDevOpsRoadmap/_workitems/edit/1364226/
 variables:
   registryName: 'moveez'
   registryLogin: ''

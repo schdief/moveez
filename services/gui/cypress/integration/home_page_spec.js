@@ -10,7 +10,6 @@ describe('The Home Page', function() {
   describe('The Enter Button', function() {
 
     it('can be clicked', function() {
-      cy.visit('/')
       cy.get('#enter').click()
     })
 
