@@ -34,28 +34,30 @@ function toggleSeenStatus(id, name, seen) {
     form.submit()
 }
 
-//suggestions from IMDB for adding a new title
-//Define API endpoints once globally
-$.fn.api.settings.api = {
-    'search' : 'https://www.omdbapi.com/?s={value}&apikey=b50af808'
-};
-$('.search input')
-  .api({
-    debug: true,
-    action: 'search',
-    searchFullText: false,
-    stateContext: '.ui.input',
-    onSuccess: function(response) {
-         if(response.Response === "True") {
-             $('.results').html("")
-             for (let suggestion of response.Search) {
-                $('.results').append("<div class=\"suggestion item\" onclick=\"addTitle('" + suggestion.Title + "', '" + suggestion.imdbID + "', '" + suggestion.Year + "', '" + suggestion.Poster + "')\"><button class=\"ui icon teal button\" id=\"add\"><i class=\"add circle icon\"></i></button><img class=\"suggestionPoster\" src=\"" + suggestion.Poster + "\" width=\"30px\" height=\"44px\"><div class=\"suggestionContent\"><h4>" + suggestion.Title + "</h4>(" + suggestion.Year +  ")</div></div>")
-             }
-             $('.results').show()
-         }
-    },
-  })
-;
+//suggestions from IMDB (via omdb api) for adding a new title
+function suggestTitle() {
+    var searchString = $('.search input').val()
+    if(searchString.length > 2) {
+        superagent.get(`https://www.omdbapi.com/?s=${searchString}&apikey=b50af808`)
+        .end((err, response) => {
+            if (err) {
+                console.log(`ERR: oMDB failed us, here is the reason: ${err}`)
+                $('.results').html("<p style='padding:5px;'> 😰ooops we can't get results from iMDB, please notify us! </p>")
+                $('.results').show()
+            } else {
+                if(response.body.Search) {
+                    $('.results').html("")
+                    for (let suggestion of response.body.Search) {
+                        $('.results').append("<div class=\"suggestion item\" onclick=\"addTitle('" + suggestion.Title + "', '" + suggestion.imdbID + "', '" + suggestion.Year + "', '" + suggestion.Poster + "')\"><button class=\"ui icon teal button\" id=\"add\"><i class=\"add circle icon\"></i></button><img class=\"suggestionPoster\" src=\"" + suggestion.Poster + "\" width=\"30px\" height=\"44px\"><div class=\"suggestionContent\"><h4>" + suggestion.Title + "</h4>(" + suggestion.Year +  ")</div></div>")
+                    }
+                    $('.results').show()
+                }
+            }
+        })
+    } else {
+        $('.results').hide(0)
+    }
+}
 
 //add a new title
 function addTitle(name, imdbID, year, poster) {

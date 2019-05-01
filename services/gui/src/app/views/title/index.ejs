@@ -7,7 +7,7 @@
           <div class="ui segment ten wide column">
             <div class="ui search focus">
             <div class="ui icon input">
-                <input class="search" id="newTitle" type="text" placeholder="search to add..." name="title[name]" required autocomplete="off" onblur="hideSuggestions()">
+                <input class="search" id="newTitle" type="text" placeholder="search to add..." name="title[name]" required autocomplete="off" onkeyup="suggestTitle()" onblur="hideSuggestions()">
                 <i class="search icon"></i>
             </div>
             <div class="results" id="results"></div>
