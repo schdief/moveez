@@ -10,7 +10,7 @@
     "start": "cd app && NODE_CONFIG_DIR='../config' node app.js",
     "watch": "nodemon -e js,ejs,css --watch ./src --exec npm run dev",
     "dev": "npm run babel && npm run webpack && cd ./dist/app && KETCHUP_ENDPOINT='localhost:8083' PORT='8443' TLS_CRT_PATH='../../tlscert/server.crt' TLS_KEY_PATH='../../tlscert/server.key' FACEBOOK_APP_SECRET_PATH='../../facebook/app_secret' NODE_CONFIG_DIR='../../config' node ./app.js",
-    "forUat": "cd ./dist/app && KETCHUP_ENDPOINT='localhost:8083' PORT='8081' NODE_CONFIG_DIR='../../config' NODE_ENV='uat' node ./app.js",
+    "forUat": "cd ./dist/app && KETCHUP_ENDPOINT='localhost:8083' PORT='8443' NODE_CONFIG_DIR='../../config' NODE_ENV='uat' node ./app.js",
     "cy:open": "cypress open",
     "cy:verify": "cypress verify",
     "uat": "cypress run"

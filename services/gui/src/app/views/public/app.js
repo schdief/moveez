@@ -48,7 +48,18 @@ function suggestTitle() {
                 if(response.body.Search) {
                     $('.results').html("")
                     for (let suggestion of response.body.Search) {
-                        $('.results').append("<div class=\"suggestion item\" onclick=\"addTitle('" + suggestion.Title + "', '" + suggestion.imdbID + "', '" + suggestion.Year + "', '" + suggestion.Poster + "')\"><button class=\"ui icon teal button\" id=\"add\"><i class=\"add circle icon\"></i></button><img class=\"suggestionPoster\" src=\"" + suggestion.Poster + "\" width=\"30px\" height=\"44px\"><div class=\"suggestionContent\"><h4>" + suggestion.Title + "</h4>(" + suggestion.Year +  ")</div></div>")
+                        //some titles have no cover and some covers are hosted at imdb, seems like they don't allow external usage of those, we replace those with a default one
+                        if(suggestion.Poster === "N/A" || suggestion.Poster.includes("media-imdb.com")) {
+                            suggestion.Poster = "/nocover.png"
+                        }
+                        //some titles are too long and mess with the layout (names don't show up because they are behind the other suggestions)
+                        var titleDisplayName
+                        if(suggestion.Title.length > 40) {
+                            titleDisplayName = suggestion.Title.substring(0, 37) + "..."
+                        } else {
+                            titleDisplayName = suggestion.Title
+                        }
+                        $('.results').append("<div class=\"suggestion item\" onclick=\"addTitle('" + suggestion.Title + "', '" + suggestion.imdbID + "', '" + suggestion.Year + "', '" + suggestion.Poster + "')\"><button class=\"ui icon teal button\" id=\"add\"><i class=\"add circle icon\"></i></button><img class=\"suggestionPoster\" src=\"" + suggestion.Poster + "\" width=\"30px\" height=\"44px\"><div class=\"suggestionContent\"><h4>" + titleDisplayName + "</h4>(" + suggestion.Year +  ")</div></div>")
                     }
                     $('.results').show()
                 }
@@ -84,5 +95,5 @@ function addTitle(name, imdbID, year, poster) {
 
 //hide suggestions when search field loses focus
 function hideSuggestions() {
-    $('.results').delay(200).hide(0)
+    $('.results').delay(20000).hide(0)
 }

@@ -25,9 +25,6 @@ We use sonarcloud.io for our static code analysis. It is automaticly triggered f
 ## Regression testing with CYPRESS
 We use cypress.io to perform our regression testing. It is automaticly triggered for all branches on UAT stage after the deployment. The results are published to Azure DevOps and a [dashboard](https://dashboard.cypress.io/#/projects/dhwwh4/runs).
 
-## Load testing with OCTOPERF
-We use octoperf.com to perform our load testing. It is automaticly triggered for `master` on UAT stage after the deployment. The results are published to a [dashboard](https://app.octoperf.com/#/app/workspace/AWDOItVk8EjRy3SNXm7S/project/AWn9_QbVnBB5lYSBzoW2/analysis).
-
 # Stack
 This app consists of multiple microservices, all based on [Express](https://expressjs.com/). They can be found in the `services` directory.
 To deploy and run the services we are using [AKS](https://azure.microsoft.com/en-us/services/kubernetes-service/) and [helm](https://helm.sh). Our data is managed by [Azure Cosmos DB](https://docs.microsoft.com/en-us/azure/cosmos-db/introduction).

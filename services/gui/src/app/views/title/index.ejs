@@ -27,7 +27,12 @@
                     <div class="item title">
                         <img class="ui image" src="<%= title.poster %>" height="150px" width="100px">
                         <div class="content titleDetails">
-                            <h4><%= title.name %></h4>
+                            <% if(title.name.length > 45) { %>
+                                <% name = title.name.substring(0, 42) + "..." %>
+                            <% } else { %>
+                                <% name = title.name %>
+                            <% } %>
+                            <h4><%= name %></h4>
                             (<%= title.year %>)
                             <div class="description">
                                 <span>
