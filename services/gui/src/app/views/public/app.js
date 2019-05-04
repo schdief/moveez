@@ -95,5 +95,5 @@ function addTitle(name, imdbID, year, poster) {
 
 //hide suggestions when search field loses focus
 function hideSuggestions() {
-    $('.results').delay(20000).hide(0)
+    $('.results').delay(200).hide(0)
 }

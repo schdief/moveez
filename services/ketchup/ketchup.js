@@ -50,7 +50,7 @@ app.get('/:id', function (req, res) {
                         //cut off % of rating
                         var tomatoUserRating = tomatoUserRatingRaw.substring(0, indexOfPercentageCharacter)
                         //cut off leading linebreak and spaces
-                        tomatoUserRating = tomatoUserRating.substring(41)
+                        tomatoUserRating = tomatoUserRating.substring(49)
                         //TODO: check whether rating can be - or N/A or similar and act
                         //respond with rating
                         console.log("INF: Got it! ✌️  Rating is: " + tomatoUserRating + " for " + req.params.id)

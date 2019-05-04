@@ -29,6 +29,7 @@ describe('The Title Page', function() {
 
 describe('Adding a Title', function() {
   it('is aided by a suggestion from iMDB when typing', function() {
+    //TODO: remove delay, not needed anymore
     cy.get('#newTitle').type('Inception', {delay: 1000}).wait(1000)
   })
   it('can be done by clicking +', function() {
