@@ -88,7 +88,7 @@ jobs:
       configMode: manual
       cliProjectKey: 'schdief:moveez-$(projectName)'
       cliProjectName: 'moveez-$(projectName)'
-      cliSources: services/$(projectName)/src
+      cliSources: services/$(projectName)
       extraProperties: |
         # setting path to code coverage report from istanbul in lcov format
         sonar.javascript.lcov.reportPaths=services/$(projectName)/coverage/lcov.info

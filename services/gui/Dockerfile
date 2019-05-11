@@ -1,17 +1,4 @@
-FROM node:alpine as build
-
-# TODO: reuse dependencies to speed up build
-# install dependencies (without cypress)
-COPY package*.json ./
-RUN npm install --no-optional
-
-# bundle app source
-COPY . .
-
-# build frontend javascript (react)
-RUN npm run babel
-
-FROM node:alpine AS final
+FROM node:alpine
 LABEL maintainer="schdief.law@gmail.com"
 LABEL service="moveezgui"
 
@@ -29,9 +16,6 @@ RUN npm install --only=prod --no-optional
 # bundle app source
 # TODO: remove unncessary files like test directory
 COPY . .
-
-# get frontend javascript (react) from previos stage
-COPY --from=build dist/app app
 
 EXPOSE 80
 

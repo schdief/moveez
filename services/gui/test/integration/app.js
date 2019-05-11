@@ -14,9 +14,9 @@ sinon.replace(
 var chai = require("chai"),
     chaitHttp = require("chai-http"),
     should = chai.should(),
-    app = require("../../src/app/app.js"),
+    app = require("../../app/app.js"),
     mongoose = require("mongoose"),
-    Title = require("../../src/app/models/title")
+    Title = require("../../app/models/title")
     
 chai.use(chaitHttp)
 

@@ -2,15 +2,13 @@
 
 |script        | action | TLS | authentication
 | ------------- |:-------------:| -----:|---:|
-|`dev`         | build and start app locally | yes (!NODE_ENV) | facebook login (!AUTH=='basic')
-|`watch`       | build and start app locally and automatically rebuild and rerun after code changes | yes (!NODE_ENV) | facebook login (!AUTH=='basic')
+|`dev`         | start app locally | yes (!NODE_ENV) | facebook login (!AUTH=='basic')
+|`watch`       | start app locally and automatically rerun after code changes | yes (!NODE_ENV) | facebook login (!AUTH=='basic')
 |`test`        | run integration tests locally | no (!!NODE_ENV) | always authenticated
 |`uat`         | run app with configuration for local uat tests |  no (!NODE_ENV) | basic auth user:cypress/pass:cypress (AUTH=='basic')
 |`cy:open`     | open cypress.io to manage acceptance tests
 |`cy:uat`      | run cypress tests
-|`start`       | start the app without prior build. This is used in production and uat environment of the cicd pipeline. | no | basic auth user:cypress/pass:cypress (NODE_ENV=='uat') or facebook login (NODE_ENV='prod')
-|`babel`       | run the source through babel compiler and place the output in ./dist
-|`webpack`     | run the source through webpack bundler
+|`start`       | start the app. This is used in production and uat environment of the cicd pipeline. | no | basic auth user:cypress/pass:cypress (NODE_ENV=='uat') or facebook login (NODE_ENV='prod')
 
 # Facebook Login
 The app uses facebook login for authentication. Tests run without it but `npm run dev` requires the facebook app secret and a self-signed TLS certificate to function properly. See below for how to set these up.
