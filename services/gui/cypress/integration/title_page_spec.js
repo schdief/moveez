@@ -95,6 +95,9 @@ describe('Deleting a Title', function() {
 })
 
   describe('logout button', ()=>{
+    it('shows username', ()=>{
+      cy.get('#logout').should('contain', 'cypress');
+    });
     it('can logout', ()=>{
       cy.get('#logout').click();
       cy.url().should('eq', Cypress.config().baseUrl + '/'); // leads to home page

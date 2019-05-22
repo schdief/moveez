@@ -1,7 +1,7 @@
 process.env.NODE_ENV = 'test'
 const sinon = require('sinon');
 const connect = require('connect-ensure-login');
-const testUser = "mocha";
+const testUser = {id: '123', displayName: "mocha"};
 sinon.replace(
     connect,
     "ensureLoggedIn",
@@ -28,8 +28,8 @@ describe("Moveez integration tests", () => {
         Title.collection.drop();
         //prepare database
         return Promise.all([
-            new Title({name: 'Inception', user: testUser}).save(),
-            new Title({name: 'Peter Pan', user: testUser}).save()
+            new Title({name: 'Inception', user: testUser.id}).save(),
+            new Title({name: 'Peter Pan', user: testUser.id}).save()
         ]);
     })
 
@@ -109,7 +109,7 @@ describe("Moveez integration tests", () => {
             it("it should GET a title", (done) => {
                 var newTitle = new Title({
                     name:"Inception",
-                    user: testUser
+                    user: testUser.id
                 })
                 newTitle.save((err, title) => {          
                     chai.request(app)

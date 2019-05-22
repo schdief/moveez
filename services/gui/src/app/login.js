@@ -24,12 +24,12 @@ const initialize = (app, port) => {
             callbackURL: DEV_MODE ? `https://localhost:${port}/auth/facebook/callback` : "https://www.moveez.de/auth/facebook/callback"
         },
         function(accessToken, refreshToken, profile, done) {
-              done(null, profile.id);
+            done(null, profile);
         }
     );
 
     const customStrategy = new LocalStrategy(
-        (user, pass, done) => user === "cypress" && pass === "cypress" ? done(null, user) : done(null, false)
+        (user, pass, done) => user === "cypress" && pass === "cypress" ? done(null, {id:user, displayName:user}) : done(null, false)
     );
 
     const authorizationStrategy = LOCAL_AUTH ? customStrategy : facebookStrategy;

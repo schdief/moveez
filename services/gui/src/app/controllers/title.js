@@ -11,7 +11,7 @@ function postTitle(req, res){
         console.log("metrics.postTitle")
     }
 
-    var newTitle = new Title({...req.body.title, user: req.user});
+    var newTitle = new Title({...req.body.title, user: req.user.id});
 
     //some titles have no imdbRating, we need to avoid crashing the db (#59)
     if(!newTitle.imdbRating) {
@@ -61,7 +61,7 @@ function getTitles(req, res){
     if(process.env.NODE_ENV !== "test"){
         console.log("metrics.getTitles")
     }
-    var query = Title.find({user:req.user}, undefined, {sort:{createdAt:-1}});
+    var query = Title.find({user:req.user.id}, undefined, {sort:{createdAt:-1}});
     query.exec((err, titles) => {
         if(err) {
             res.status(HttpStatus.NOT_FOUND)
@@ -71,7 +71,7 @@ function getTitles(req, res){
             if(req.get('Accept') === "application/json"){
                 res.json(titles)
             } else {
-                res.render("title/index", {titles: titles})
+                res.render("title/index", {titles: titles, username: req.user.displayName})
             }
         }
     })
@@ -83,7 +83,7 @@ function getTitle(req, res){
     if(process.env.NODE_ENV !== "test"){
         console.log("metrics.getTitle")
     }
-    var query = Title.findOne({ _id: req.params.id, user: req.user });
+    var query = Title.findOne({ _id: req.params.id, user: req.user.id });
     query.exec((err, title) => {
         if(err || !title) {
             res.status(HttpStatus.NOT_FOUND)
@@ -107,7 +107,7 @@ function updateTitle(req, res){
     }
     //check for name in body
     if(req.body.title.name !== "") {
-        var query = Title.findOneAndUpdate({ _id: req.params.id, user: req.user }, {...req.body.title, user: req.user}, {new: true})
+        var query = Title.findOneAndUpdate({ _id: req.params.id, user: req.user.id }, {...req.body.title, user: req.user.id}, {new: true})
         query.exec((err, updatedTitle) => {
             if(err || !updatedTitle) {
                 res.status(HttpStatus.NOT_FOUND)
@@ -148,7 +148,7 @@ function deleteTitle(req, res){
     if(process.env.NODE_ENV !== "test"){
         console.log("metrics.deleteTitle")
     }
-    var query = Title.findOneAndRemove({ _id: req.params.id, user: req.user }, req.body.title)
+    var query = Title.findOneAndRemove({ _id: req.params.id, user: req.user.id }, req.body.title)
     query.exec((err, deletedTitle) => {
         if(err || !deletedTitle) {
             res.status(HttpStatus.NOT_FOUND)
