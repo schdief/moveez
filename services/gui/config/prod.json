@@ -1,6 +1,6 @@
 {
     "dbProtocol": "mongodb",
     "dbPort": "10255",
-    "dbName": "moveez_db_prod",
-    "dbHost": "moveez.documents.azure.com"
+    "dbName": "prod",
+    "dbHost": "mongodb-moveez-prod"
 }

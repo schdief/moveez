@@ -1,32 +1,26 @@
 # Database
-In general we are using MongoDB as a database, because we hate SQL :)
+In general we are using `MongoDB` as a database, because we hate `SQL` :)
 
 ## DEV/TEST
-For our dev and test environments we use [mlab.com](https://mlab.com) and their sandbox environments. The configuration can be seen in `services/gui/config/default.json` (for DEV) or `/test.json` (for TEST).
+For our dev and test environments we use [mlab.com](https://mlab.com) and their sandbox environments. The configuration can be seen in `services/gui/config/default.json` (for DEV) or `test.json` (for TEST).
 
-## UAT
-For UAT we use a (currently single) local MongoDB on AKS. Set it up with the [helm chart](https://github.com/helm/charts/tree/master/stable/mongodb):
+## UAT/PROD
+We used to rely on Azures `CosmosDB` but the pricing failed us, therefore we've switched to a local `MongoDB` on `AKS`. To set it up we use the `Bitnami` image and `helm` with the parameters defined in `values-production.yaml`:
+### UAT
 ```
-helm install --name mongodb-moveez-uat \
-    --set mongodbRootPassword=uat,mongodbUsername=uat,mongodbPassword=uat,mongodbDatabase=uat,persistence.size=8Mi\
+helm install --name mongodb-moveez-uat -f ./values-production.yaml \
+    --set mongodbRootPassword=uat,mongodbUsername=uat,mongodbPassword=uat,mongodbDatabase=uat \
     stable/mongodb
 ```
-
-## PROD
-In production we use Azures `CosmosDB` because it should be highly reliable, has automatic backups and should be easy to use by having an attractive price point (we'll see about that).
-
-## Configuration
-### Create the CosmosDB
-Create the CosmosDB via GUI or with the ARM template in this folder.
-
-### Change configuration values
-Update the values in `services/gui/config/prod.json` taken from the connection string section so gui knows where to look for the database. Username and password of the production environment are taken from a secret, which we'll deploy next.
-
-### Create a secret with username and password for the database
-Create the secret with this command:
+### PROD
+With the initial deployment a `mongodbRootPassword` is defined and stored within `schdief`s iCloud Keychain. The other secrets are stored within Kubernetes as a secret called `TODO:`, defined within `TODO:` and deployed with:
 ```
-kubectl create secret generic moveez-prod-db --from-literal=dbuser=secret --from-literal=dbpass=secret
+TODO:
 ```
 
-### Set down the RU/s
-Default is 1000 RU/s, 400 (minimum) should be enough, so scale it down via GUI and scale section.
+The database is deployed just like the UAT environment:
+```
+helm install --name mongodb-moveez-prod -f ./values-production.yaml \
+    --set mongodbRootPassword=SECRET,mongodbUsername=SECRET,mongodbPassword=SECRET,mongodbDatabase=prod \
+    stable/mongodb
+```
