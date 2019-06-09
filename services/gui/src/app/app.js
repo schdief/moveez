@@ -37,8 +37,6 @@ let dbUser
 let dbPassword
 var dbConnectionString = config.dbProtocol + "://" + config.dbHost + ":" + config.dbPort + "/" + config.dbName
 if(process.env.NODE_ENV === "prod") {
-    //CosmosDB requires ssl=true
-    dbConnectionString += "?ssl=true&replicaSet=globaldb"
     dbPassword = process.env.DB_PASS
     dbUser = process.env.DB_USER
 } else {
