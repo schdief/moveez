@@ -6,4 +6,4 @@ We are using Azure for all our infrastructure needs. All in all we are using the
 * `MongoDB` (as described in folder `database`)
 
 We are planning to use:
-* `linkerd.io`as service mesh
+* `linkerd.io` as service mesh

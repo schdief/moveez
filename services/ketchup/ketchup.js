@@ -43,7 +43,7 @@ app.get('/:id', function (req, res) {
                 } else {
                     //parse HTML for tomatoUserRating
                     var $ = cheerio.load(response.text)
-                    var tomatoUserRatingRaw = $("span.mop-ratings-wrap__percentage--audience").text()
+                    var tomatoUserRatingRaw = $("span.mop-ratings-wrap__percentage").eq(1).text()
                     //check whether rating could be found
                     const indexOfPercentageCharacter = tomatoUserRatingRaw.indexOf("%")
                     if(indexOfPercentageCharacter != -1) {
