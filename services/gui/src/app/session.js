@@ -7,8 +7,7 @@ const initialize = app => {
         secure: true,
         secret: sessionSecret,
         resave: true,
-        saveUninitialized: true,
-        cookie: { maxAge: 60000 }
+        saveUninitialized: true
     }));
 }
 
