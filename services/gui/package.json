@@ -4,11 +4,11 @@
   "description": "manage your binge!",
   "main": "app.js",
   "scripts": {
-    "test": "NODE_ENV='test' PORT='8082' RELEASE='mocha test' nyc --reporter=lcov --reporter=text --reporter=cobertura mocha 'test/integration/*.js' --timeout 20000 --full-trace",
-    "start": "cd app && NODE_CONFIG_DIR='../config' node app.js",
+    "test": "cd ./app && NODE_ENV='test' PORT='8082' NODE_CONFIG_DIR='../config' RELEASE='mocha test' nyc --reporter=lcov --reporter=text --reporter=cobertura mocha --timeout 20000 --full-trace ../test/integration/*Test.js",
+    "start": "cd app && NODE_CONFIG_DIR='../config' node .",
     "watch": "nodemon -e js,ejs,css --watch ./app --exec npm run dev",
-    "dev": "cd ./app && KETCHUP_ENDPOINT='localhost:8083' PORT='8443' TLS_CRT_PATH='../tlscert/server.crt' TLS_KEY_PATH='../tlscert/server.key' FACEBOOK_APP_SECRET_PATH='../facebook/app_secret' NODE_CONFIG_DIR='../config' node ./app.js",
-    "uat": "cd ./app && KETCHUP_ENDPOINT='localhost:8083' PORT='8081' NODE_CONFIG_DIR='../config' AUTH='basic' node ./app.js",
+    "dev": "cd ./app && KETCHUP_ENDPOINT='localhost:8083' PORT='8443' TLS_CRT_PATH='../tlscert/server.crt' TLS_KEY_PATH='../tlscert/server.key' FACEBOOK_APP_SECRET_PATH='../facebook/app_secret' NODE_CONFIG_DIR='../config' node .",
+    "uat": "cd ./app && KETCHUP_ENDPOINT='localhost:8083' PORT='8081' NODE_CONFIG_DIR='../config' AUTH='basic' node .",
     "cy:open": "cypress open",
     "cy:uat": "cypress run"
   },

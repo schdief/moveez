@@ -31,9 +31,11 @@
             <!-- collapsed nav -->
             <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
                 <hr class="d-sm-none">
-                <a id="logout" href="/logout" class="btn btn-icon-danger btn-danger">
-                    <i class="fas fa-sign-out-alt"></i> Logout (<%= username %>)
-                </a>
+                <% if (username) { %>
+                    <a id="logout" href="/logout" class="btn btn-icon-danger btn-danger">
+                        <i class="fas fa-sign-out-alt"></i> Logout (<%= username %>)
+                    </a>
+                <% } %>
             </div>
         </nav>
 

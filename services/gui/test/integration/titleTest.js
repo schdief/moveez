@@ -1,29 +1,31 @@
-process.env.NODE_ENV = 'test'
 const sinon = require('sinon');
 const connect = require('connect-ensure-login');
+const {createApp} = require("../../app/app.js");
 const testUser = {id: '123', displayName: "mocha"};
-sinon.replace(
-    connect,
-    "ensureLoggedIn",
-    ()=>(req, resp, next)=>{
-        req.user = testUser;
-        next();
-    }
-);
+let app;
 
 var chai = require("chai"),
     chaitHttp = require("chai-http"),
     should = chai.should(),
-    app = require("../../app/app.js"),
     mongoose = require("mongoose"),
     Title = require("../../app/models/title")
     
 chai.use(chaitHttp)
 
-describe("Moveez integration tests", () => {
+describe("TitleTest", () => {
 
     //TODO: should be beforeEach but then I'd need promises :S
     before(() => {
+
+        sinon.replace(
+            connect,
+            "ensureLoggedIn",
+            ()=>(req, resp, next)=>{
+                req.user = testUser;
+                next();
+            }
+        );
+        app = createApp();
         //clean database
         Title.collection.drop();
         //prepare database
@@ -33,19 +35,6 @@ describe("Moveez integration tests", () => {
         ]);
     })
 
-    describe("Index", () => {
-        it("it should show the welcome message", (done) => {
-            chai.request(app)
-                .get("/")
-                .set('Accept', 'application/json')
-                .end((err, res) => {
-                    res.should.have.status(200)
-                    res.should.be.json
-                    res.body.should.have.property("message").eql("Welcome to mocha test!")
-                    done()
-            })
-        })    
-    })
     describe("Titles", () => {
         describe("Create", () => {
             it('it should not POST a title without name', (done) => {

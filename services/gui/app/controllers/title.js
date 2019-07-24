@@ -37,7 +37,6 @@ function postTitle(req, res){
 
             newTitle.save((err, title) => {
                 if(err) {
-                    console.error(err)
                     res.status(HttpStatus.NOT_FOUND)
                       .send(err)
                 } else {

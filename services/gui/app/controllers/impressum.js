@@ -1,5 +1,7 @@
 const impressum = (req, res) => {
-    res.render("impressum/index");
+    const username = req.user ? req.user.displayName : undefined;
+    console.log("rendering impressung");
+    res.render("impressum/index", {username});
 };
 
 module.exports = {
