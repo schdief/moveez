@@ -80,3 +80,23 @@ We'll add 2 seperate clusters, one for `UAT` and one for `PROD`. Follow those st
 - `Network Provider`: Canal
 - `Project Network Isolation`: Enabled
 - `Cloud Provider`: none
+
+## Install Tiller
+Helm is the package management tool of choice for Kubernetes. Helm “charts” provide templating syntax for Kubernetes YAML manifest documents. With Helm we can create configurable deployments instead of just using static files. For more information about creating your own catalog of deployments, check out the docs at https://helm.sh/. To be able to use Helm, the server-side component tiller needs to be installed on your cluster.
+
+Follow this [guide](https://rancher.com/docs/rancher/v2.x/en/installation/ha/helm-init/)
+```
+kubectl -n kube-system create serviceaccount tiller
+
+kubectl create clusterrolebinding tiller \
+  --clusterrole=cluster-admin \
+  --serviceaccount=kube-system:tiller
+
+helm init --service-account tiller
+```
+
+## Permit Kubernetes to access ACR
+Kubernetes will need to access the ACR to pull the images. It will use the ImagePullSecret defined in the deployment.yaml - should be `acr-auth`. Create the secret as described [here](https://docs.microsoft.com/de-de/azure/container-registry/container-registry-auth-aks) with:
+```
+kubectl create secret docker-registry acr-auth --docker-server "moveez.azurecr.io" --docker-username "ID" --docker-password "secret" --docker-email "schdief.law@gmail.com"
+```
