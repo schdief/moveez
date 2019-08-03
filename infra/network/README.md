@@ -76,7 +76,7 @@ echo $AZURE_CERT_MANAGER_SP_APP_ID
 ### Deploy wildcard cluster issuer
 Amost done, now we need to set up a cluster-issuer that listens for new certificate objects and creates orders for the cert-manager to create new valid certificates.
 ```
-kubectl create -f cluster-issuer.yml
+kubectl create -f cluster-issuer.yml --namespace cert-manager
 ```
 
 ### Create the wildcard certifacte request for *.moovez.de
