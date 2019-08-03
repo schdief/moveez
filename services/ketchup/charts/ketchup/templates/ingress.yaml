@@ -11,7 +11,7 @@ spec:
   tls:
   - hosts:
     - ketchup-{{ template "branchName" . }}-{{ .Values.stage }}.moveez.de
-    secretName: wildcard
+    secretName: wildcardprod
   rules:
   - host: ketchup-{{ template "branchName" . }}-{{ .Values.stage }}.moveez.de
     http:

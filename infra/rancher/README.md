@@ -1,10 +1,10 @@
 # Rancher
 To run our services we are using [Rancher](https://rancher.com). The infrastructure is provided by [Hetzner Cloud](https://console.hetzner.cloud/projects).
 
-# Setup
+## Setup
 The whole setup is based on this [guide in the Hetzner Community](https://community.hetzner.com/tutorials/hcloud-install-rancher-single).
 
-## Server
+### Server
 Create a new server within the Hetzner Cloud GUI. We have selected a CX21 (2 CPU, 4GB RAM, 40GB SSD, 20GB Traffic) instance based on Cent OS 7 and running in Nürnberg.
 Skip the volumes and network section, activate backups and enter the following config to the `user data`section:
 ```
@@ -32,10 +32,10 @@ systemctl enable docker
 
 ```
 
-## DNS
+### DNS
 Add an `A-record set`named `rancher.moveez.de` to your DNS zone inside `Azure DNS`.
 
-## Start Rancher
+### Start Rancher
 As Rancher is provided as a docker image we only need to run it. Connect to your server with:
 ```
 ssh root@rancher.moveez.de
@@ -51,7 +51,7 @@ docker run -d --restart=unless-stopped \
 
 Define a password for the admin user and login.
 
-## Setup Hetzner Cloud Node Driver
+### Setup Hetzner Cloud Node Driver
 To create a cluster within Hetzner Cloud we'll need to add it manually as a driver, based on the [ui-driver-hetzner](https://github.com/mxschmitt/ui-driver-hetzner).
 Open [rancher.moveez.de](https://rancher.moveez.de) and go to `Tools -> Drivers`. On this page, click on the Tab `Node Drivers` and the button `Add Node Driver` on the right side.
 A new dialog opens. Enter the following values:
@@ -62,7 +62,7 @@ A new dialog opens. Enter the following values:
 
 Click `Create`. A new entry `Hetzner` should appear and shortly afterwards shown as `Active`.
 
-## Add Clusters for UAT and PROD
+### Add Clusters for UAT and PROD
 We'll add 2 seperate clusters, one for `UAT` and one for `PROD`. Follow those steps to do so (same for UAT and PROD):
 
 1. Navigate to `Clusters` and click `add cluster`.
@@ -81,7 +81,7 @@ We'll add 2 seperate clusters, one for `UAT` and one for `PROD`. Follow those st
 - `Project Network Isolation`: Enabled
 - `Cloud Provider`: none
 
-## Install Tiller
+### Install Tiller
 Helm is the package management tool of choice for Kubernetes. Helm “charts” provide templating syntax for Kubernetes YAML manifest documents. With Helm we can create configurable deployments instead of just using static files. For more information about creating your own catalog of deployments, check out the docs at https://helm.sh/. To be able to use Helm, the server-side component tiller needs to be installed on your cluster.
 
 Follow this [guide](https://rancher.com/docs/rancher/v2.x/en/installation/ha/helm-init/)
@@ -95,7 +95,7 @@ kubectl create clusterrolebinding tiller \
 helm init --service-account tiller
 ```
 
-## Permit Kubernetes to access ACR
+### Permit Kubernetes to access ACR
 Kubernetes will need to access the ACR to pull the images. It will use the ImagePullSecret defined in the deployment.yaml - should be `acr-auth`. Create the secret as described [here](https://docs.microsoft.com/de-de/azure/container-registry/container-registry-auth-aks) with:
 ```
 kubectl create secret docker-registry acr-auth --docker-server "moveez.azurecr.io" --docker-username "ID" --docker-password "secret" --docker-email "schdief.law@gmail.com"
