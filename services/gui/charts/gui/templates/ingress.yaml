@@ -11,7 +11,7 @@ spec:
   tls:
   - hosts:
     - gui-{{ template "branchName" . }}-{{ .Values.stage }}.moveez.de
-    secretName: wildcard
+    secretName: wildcardprod
   rules:
   - host: gui-{{ template "branchName" . }}-{{ .Values.stage }}.moveez.de
     http:

@@ -1,7 +1,7 @@
 # Infrastructure
-We are using Azure for all our infrastructure needs. All in all we are using the following services:
-* `AKS` (as described in folder `aks`)
-* `ACS` (extending AKS)
+We are using the following services for our infrastructure needs:
+* `Rancher` (as described in folder `rancher`)
+* `ACS` (current Container Registry, until switched with https://github.com/schdief/moveez/issues/98)
 * `Azure DNS` (as described in folder `network`)
 * `MongoDB` (as described in folder `database`)
 

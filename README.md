@@ -19,15 +19,14 @@ Within Azure DevOps we are using Azure Pipelines to build and release moveez.
 * The build configuration is done via `azure-build-pipeline.yml` per service.
 * The release is currently configured in GUI due to [lack of support of release config files](https://dev.azure.com/mseng/AzureDevOpsRoadmap/_workitems/edit/1364226/). Nevertheless we already store the release config in `azure-release-pipeline.yaml`.
 
-## Code analysis with SonarCloud
+## Code analysis with Sonarcloud.io
 We use sonarcloud.io for our static code analysis. It is automaticly triggered for all branches as a parallel step to the build. The results are published to Azure DevOps and a [dashboard](https://sonarcloud.io/organizations/schdief-github/projects).
 
-## Regression testing with CYPRESS
+## Regression testing with Cypress.io
 We use cypress.io to perform our regression testing. It is automaticly triggered for all branches on UAT stage after the deployment. The results are published to Azure DevOps and a [dashboard](https://dashboard.cypress.io/#/projects/dhwwh4/runs).
 
-# Stack
-This app consists of multiple microservices, all based on [Express](https://expressjs.com/). They can be found in the `services` directory.
-To deploy and run the services we are using [AKS](https://azure.microsoft.com/en-us/services/kubernetes-service/) and [helm](https://helm.sh). Our data is managed by [Azure Cosmos DB](https://docs.microsoft.com/en-us/azure/cosmos-db/introduction).
+# Stack/Architecture
+This app consists of multiple [microservices](https://github.com/schdief/moveez/tree/master/services), all based on [Express](https://expressjs.com/). Our data is managed by [MongoDB](https://www.mongodb.com) - the setup is described in the [database directory](https://github.com/schdief/moveez/tree/master/infra/database). To run the services and database we are using [Rancher](https://rancher.com), which setup is described [here](https://github.com/schdief/moveez/tree/master/infra/rancher). The deployment of services to Rancher is done via [helm](https://helm.sh). 
 
 # Run
 ## Monitoring

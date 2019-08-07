@@ -16,11 +16,11 @@ spec:
         azuredns:
           email: schdief.law@gmail.com
           # Service principal client id
-          clientID: daec0f2a-6b19-42e1-a744-70bce971465e
+          clientID: 41627dfb-f091-43ec-805d-9fbb126e37c8
           # Secret with the password
           clientSecretSecretRef:
-            key: password
-            name: secret-azuredns-config
+            name: azuredns-config
+            key: CLIENT_SECRET
           # Name of the DNS Zone
           hostedZoneName: moveez.de
           # Resource group where the DNS Zone is located
