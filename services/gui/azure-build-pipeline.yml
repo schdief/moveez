@@ -92,7 +92,6 @@ jobs:
       extraProperties: |
         sonar.log.level=DEBUG
         sonar.pullrequest.base=$(System.PullRequest.TargetBranch)
-        sonar.pullrequest.branch=$(System.PullRequest.SourceBranch)
         sonar.pullrequest.key=$(System.PullRequest.PullRequestId)
         sonar.pullrequest.provider=GitHub
         sonar.pullrequest.github.repository=schdief/moveez
