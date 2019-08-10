@@ -91,10 +91,6 @@ jobs:
       cliSources: services/$(projectName)
       extraProperties: |
         sonar.log.level=DEBUG
-        sonar.pullrequest.base=$(System.PullRequest.TargetBranch)
-        sonar.pullrequest.key=$(System.PullRequest.PullRequestId)
-        sonar.pullrequest.provider=GitHub
-        sonar.pullrequest.github.repository=schdief/moveez
         # setting path to code coverage report from istanbul in lcov format
         sonar.javascript.lcov.reportPaths=services/$(projectName)/coverage/lcov.info
         sonar.text=services/$(projectName)/test
