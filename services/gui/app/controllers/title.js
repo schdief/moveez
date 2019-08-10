@@ -34,7 +34,7 @@ function postTitle(req, res){
             } else {
                 newTitle.tomatoUserRating = response.body.tomatoUserRating
             }
-
+            (err => console.log(err))(err);
             newTitle.save((err, title) => {
                 if(err) {
                     res.status(HttpStatus.NOT_FOUND)
