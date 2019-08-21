@@ -19,5 +19,6 @@ jobs:
         node-version: ${{ matrix.node-version }}
     - name: unit test
       run: |
+        cd services/gui
         npm install
         npm test
