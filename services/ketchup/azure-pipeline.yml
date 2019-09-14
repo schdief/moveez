@@ -145,6 +145,6 @@ stages:
           - bash: |
               echo "sleep for 20 seconds"
               sleep 20
-              echo "curl https://$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName).moveez.de/health -v"
-              curl https://$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName).moveez.de/health -v
-              displayName: Flightcheck
+              echo "curl https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de/health -v"
+              curl https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de/health -v
+            displayName: Flightcheck
