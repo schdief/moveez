@@ -33,8 +33,9 @@ stages:
         docker push $(registryServerName)/$(imageName):$(build.BuildNumber)_$(build.sourceBranchName)
         docker push $(registryServerName)/$(imageName):latest
       displayName: 'docker push'
-      #condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
-
+      
+  - job: Helm
+    steps:
     - task: HelmInstaller@0
       displayName: 'Install Helm'
       inputs:
