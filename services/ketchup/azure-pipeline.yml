@@ -109,7 +109,7 @@ stages:
   - deployment: Deploy
     pool:
       vmImage: 'ubuntu-16.04'
-    #environment: 'uat'
+    environment: 'uat'
     strategy:
       runOnce:
         deploy:
