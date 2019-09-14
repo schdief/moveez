@@ -17,9 +17,9 @@ variables:
   projectName: 'ketchup'
 
 stages:
-- stage: Build
+- stage: BUILD
   jobs:
-  - job: Build
+  - job: Docker & Helm
     pool:
       vmImage: 'ubuntu-16.04'
     steps:
@@ -106,7 +106,7 @@ stages:
 
 - stage: UAT
   jobs:
-  - deployment: ketchup
+  - deployment: Deploy
     pool:
       vmImage: 'ubuntu-16.04'
     environment: 'uat'

@@ -57,7 +57,9 @@ app.get("/:id", function(req, res) {
           tomatoUserRating = tomatoUserRating.replace(/\s/g, "");
           //TODO: check whether rating can be - or N/A or similar and act
           //respond with rating
-          console.log(`INF: Got it! ✌️  Rating is: ${tomatoUserRating} for ${req.params.id}`);
+          console.log(
+            `INF: Got it! ✌️  Rating is: ${tomatoUserRating} for ${req.params.id}`
+          );
           res.status(HttpStatus.OK);
           res.json({ tomatoUserRating });
           //TODO: save rating in database to cache result
