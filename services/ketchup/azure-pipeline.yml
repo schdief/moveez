@@ -52,7 +52,6 @@ stages:
       
     - bash: az acr helm push -n $(registryName) -u $(registryLogin) -p $(registryPassword) $(build.artifactStagingDirectory)/$(projectName)_$(build.sourceBranchName)-$(build.BuildNumber).tgz
       displayName: 'az acr helm push'
-      #condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
 
   - job: Scan
     pool:
@@ -110,7 +109,7 @@ stages:
   - deployment: Deploy
     pool:
       vmImage: 'ubuntu-16.04'
-    environment: 'uat'
+    #environment: 'uat'
     strategy:
       runOnce:
         deploy:
