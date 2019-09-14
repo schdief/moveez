@@ -19,7 +19,7 @@ variables:
 stages:
 - stage: BUILD
   jobs:
-  - job: Docker & Helm
+  - job: Docker and Helm
     pool:
       vmImage: 'ubuntu-16.04'
     steps:
