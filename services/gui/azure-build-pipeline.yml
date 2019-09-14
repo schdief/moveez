@@ -73,6 +73,10 @@ jobs:
       workingDir: 'services/$(projectName)'
       verbose: false
       customCommand: test
+      
+  - bash: 'npx prettier --check "test/**/*.js" "app/**/*.js" "cypress/integration/**/*.js"'
+    workingDirectory: $(system.defaultWorkingDirectory)/services/$(projectName)
+    displayName: 'check code formatting'
 
   - task: PublishCodeCoverageResults@1
     displayName: 'Publish code coverage from istanbul via cobertura'
@@ -100,7 +104,3 @@ jobs:
 
   - task: SonarSource.sonarcloud.38b27399-a642-40af-bb7d-9971f69712e8.SonarCloudPublish@1
     displayName: 'Publish Quality Gate Result'
-
-  - bash: 'npx prettier --check "test/**/*.js" "app/**/*.js" "cypress/integration/**/*.js"'
-    workingDirectory: $(system.defaultWorkingDirectory)/services/$(projectName)
-    displayName: 'check code formatting'

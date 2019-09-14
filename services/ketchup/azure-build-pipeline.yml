@@ -67,6 +67,10 @@ jobs:
       workingDir: 'services/$(projectName)'
       verbose: false
       customCommand: test
+  
+  - bash: 'npx prettier --check "test/**/.js" "ketchup.js"'
+    workingDirectory: $(system.defaultWorkingDirectory)/services/$(projectName)
+    displayName: 'check code formatting' 
 
   - task: PublishCodeCoverageResults@1
     displayName: 'Publish code coverage from istanbul via cobertura'
