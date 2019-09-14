@@ -139,8 +139,8 @@ stages:
               kubernetesServiceConnection: rancher
               command: upgrade
               chartName: '$(registryName)/$(projectName)_$(Build.SourceBranchName)'
-              releaseName: '$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName)'
-              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName) --set stage=$(Release.EnvironmentName)'
+              releaseName: '$(projectName)-$(Build.SourceBranchName)-$(Environment.Name)'
+              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName) --set stage=$(Environment.Name)'
 
           - bash: |
               echo "sleep for 20 seconds"
