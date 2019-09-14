@@ -2,7 +2,8 @@ trigger:
   batch: true
   branches:
     include:
-    - refs/heads/*
+    - refs/heads/master
+    - refs/pull/*
   paths:
     include: 
     - services/ketchup/
