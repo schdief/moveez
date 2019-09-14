@@ -1,4 +1,5 @@
 # How-To develop and run the service
+test
 
 |script        | action | TLS | authentication
 | ------------- |:-------------:| -----:|---:|

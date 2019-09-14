@@ -1,4 +1,5 @@
 # Ketchup
+test
 The service `ketchup` fetches data provided by [Rotten Tomatoes](rottentomatoes.com) like user ratings and provides them 
 via an API to `moveez`.
 
