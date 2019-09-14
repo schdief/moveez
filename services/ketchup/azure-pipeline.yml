@@ -1,0 +1,149 @@
+trigger:
+  batch: true
+  branches:
+    include:
+    - refs/heads/master
+    - refs/pull/*
+  paths:
+    include: 
+    - services/ketchup/
+
+variables:
+  registryServerName: '$(registryName).azurecr.io'
+  imageName: '$(projectName)'
+  #Your build pipeline references a secret variable named ‘registryPassword’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab, and then select the option to make it secret. See https://go.microsoft.com/fwlink/?linkid=865972
+  registryName: 'moveez'
+  registryLogin: 'fc5f6c73-2b9d-4694-acb6-fcccc6fd2791'
+  projectName: 'ketchup'
+
+stages:
+- stage: Build
+  jobs:
+  - job: Build
+    pool:
+      vmImage: 'ubuntu-16.04'
+    steps:
+    - bash: docker build -f $(system.defaultWorkingDirectory)/services/$(projectName)/Dockerfile -t $(registryServerName)/$(imageName):$(build.BuildNumber)_$(build.sourceBranchName) -t $(registryServerName)/$(imageName):latest $(system.defaultWorkingDirectory)/services/$(projectName)
+      displayName: 'docker build'
+
+    - bash: docker login $(registryServerName) -u $(registryLogin) -p $(registryPassword)
+      displayName: 'docker login'
+
+    - bash: |
+        docker push $(registryServerName)/$(imageName):$(build.BuildNumber)_$(build.sourceBranchName)
+        docker push $(registryServerName)/$(imageName):latest
+      displayName: 'docker push'
+      #condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+
+    - task: HelmInstaller@0
+      displayName: 'Install Helm'
+      inputs:
+        helmVersion: 2.13.0
+
+    - bash: sed -i 's/$(projectName)/$(projectName)_$(build.sourceBranchName)/g' $(system.defaultWorkingDirectory)/services/$(projectName)/charts/$(projectName)/Chart.yaml
+      displayName: 'update Chart.yaml with branch name'
+
+    - bash: mv $(system.defaultWorkingDirectory)/services/$(projectName)/charts/$(projectName) $(system.defaultWorkingDirectory)/services/$(projectName)/charts/$(projectName)_$(build.sourceBranchName)
+      displayName: 'renaming chart folder to match Chart.yaml name'
+
+    - bash: helm package --version $(build.BuildNumber) --destination $(build.artifactStagingDirectory) $(system.defaultWorkingDirectory)/services/$(projectName)/charts/$(projectName)_$(build.sourceBranchName)
+      displayName: 'helm package'
+      
+    - bash: az acr helm push -n $(registryName) -u $(registryLogin) -p $(registryPassword) $(build.artifactStagingDirectory)/$(projectName)_$(build.sourceBranchName)-$(build.BuildNumber).tgz
+      displayName: 'az acr helm push'
+      #condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+
+  - job: Scan
+    pool:
+      vmImage: 'ubuntu-16.04'
+      demands: java
+
+    steps:
+    - task: Npm@1
+      displayName: 'npm install (dependencies)'
+      inputs:
+        workingDir: 'services/$(projectName)'
+        verbose: false
+
+    - task: Npm@1
+      displayName: 'npm test (unit)'
+      inputs:
+        command: custom
+        workingDir: 'services/$(projectName)'
+        verbose: false
+        customCommand: test
+    
+    - bash: 'npx prettier --check "test/**/.js" "ketchup.js"'
+      workingDirectory: $(system.defaultWorkingDirectory)/services/$(projectName)
+      displayName: 'check code formatting' 
+
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish code coverage from istanbul via cobertura'
+      inputs:
+        codeCoverageTool: Cobertura
+        summaryFileLocation: 'services/$(projectName)/coverage/cobertura-coverage.xml'
+        
+    - task: SonarSource.sonarcloud.14d9cde6-c1da-4d55-aa01-2965cd301255.SonarCloudPrepare@1
+      displayName: 'Prepare analysis on SonarCloud'
+      inputs:
+        SonarCloud: azuredevops
+        organization: 'schdief-github'
+        scannerMode: CLI
+        configMode: manual
+        cliProjectKey: 'schdief:moveez-$(projectName)'
+        cliProjectName: 'moveez-$(projectName)'
+        cliSources: services/$(projectName)
+        extraProperties: |
+          # setting path to code coverage report from istanbul in lcov format
+          sonar.javascript.lcov.reportPaths=services/$(projectName)/coverage/lcov.info
+          sonar.text=services/$(projectName)/test
+
+    - task: SonarSource.sonarcloud.ce096e50-6155-4de8-8800-4221aaeed4a1.SonarCloudAnalyze@1
+      displayName: 'Run Code Analysis'
+
+    - task: SonarSource.sonarcloud.38b27399-a642-40af-bb7d-9971f69712e8.SonarCloudPublish@1
+      displayName: 'Publish Quality Gate Result'
+
+- stage: UAT
+  jobs:
+  - deployment: ketchup
+    pool:
+      vmImage: 'ubuntu-16.04'
+    environment: 'uat'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: HelmInstaller@0
+            displayName: 'Install Helm 2.13.0'
+            inputs:
+              helmVersion: 2.13.0
+              checkLatestHelmVersion: false
+
+          - task: HelmDeploy@0
+            displayName: 'helm init'
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceConnection: rancher
+              command: init
+              arguments: '--service-account tiller'
+
+          - bash: 'helm repo add $(registryName) https://$(registryName).azurecr.io/helm/v1/repo --username $(registryLogin) --password $(registryPassword)'
+            displayName: 'helm repo add'
+
+          - task: HelmDeploy@0
+            displayName: 'helm upgrade'
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceConnection: rancher
+              command: upgrade
+              chartName: '$(registryName)/$(projectName)_$(Build.SourceBranchName)'
+              releaseName: '$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName)'
+              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName) --set stage=$(Release.EnvironmentName)'
+
+          - bash: |
+              echo "sleep for 20 seconds"
+              sleep 20
+              echo "curl https://$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName).moveez.de/health -v"
+              curl https://$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName).moveez.de/health -v
+              displayName: Flightcheck
