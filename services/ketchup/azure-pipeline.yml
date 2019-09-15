@@ -6,7 +6,7 @@ trigger:
     - refs/pull/*
   paths:
     include: 
-    - services/ketchup/
+    - services/ketchup/*
 
 variables:
   registryServerName: '$(registryName).azurecr.io'
@@ -76,14 +76,13 @@ stages:
     - bash: 'npx prettier --check "test/**/.js" "ketchup.js"'
       workingDirectory: $(system.defaultWorkingDirectory)/services/$(projectName)
       displayName: 'check code formatting' 
-
     - task: PublishCodeCoverageResults@1
       displayName: 'Publish code coverage from istanbul via cobertura'
       inputs:
         codeCoverageTool: Cobertura
         summaryFileLocation: 'services/$(projectName)/coverage/cobertura-coverage.xml'
         
-    - task: SonarSource.sonarcloud.14d9cde6-c1da-4d55-aa01-2965cd301255.SonarCloudPrepare@1
+    - task: SonarCloudPrepare@1
       displayName: 'Prepare analysis on SonarCloud'
       inputs:
         SonarCloud: azuredevops
@@ -97,11 +96,10 @@ stages:
           # setting path to code coverage report from istanbul in lcov format
           sonar.javascript.lcov.reportPaths=services/$(projectName)/coverage/lcov.info
           sonar.text=services/$(projectName)/test
-
-    - task: SonarSource.sonarcloud.ce096e50-6155-4de8-8800-4221aaeed4a1.SonarCloudAnalyze@1
+    - task: SonarCloudAnalyze@1
       displayName: 'Run Code Analysis'
 
-    - task: SonarSource.sonarcloud.38b27399-a642-40af-bb7d-9971f69712e8.SonarCloudPublish@1
+    - task: SonarCloudPublish@1
       displayName: 'Publish Quality Gate Result'
 
 - stage: UAT
@@ -132,6 +130,51 @@ stages:
           - bash: 'helm repo add $(registryName) https://$(registryName).azurecr.io/helm/v1/repo --username $(registryLogin) --password $(registryPassword)'
             displayName: 'helm repo add'
 
+          - task: HelmDeploy@0
+            displayName: 'helm upgrade'
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceConnection: rancher
+              command: upgrade
+              chartName: '$(registryName)/$(projectName)_$(Build.SourceBranchName)'
+              releaseName: '$(projectName)-$(Build.SourceBranchName)-$(Environment.Name)'
+              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName) --set stage=$(Environment.Name)'
+
+          - bash: |
+              echo "sleep for 20 seconds"
+              sleep 20
+              echo "curl https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de/health -v"
+              curl https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de/health -v
+            displayName: Flightcheck
+
+- stage: PROD
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: 'ubuntu-16.04'
+    environment: 'prod'
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: none
+          - task: HelmInstaller@0
+            displayName: 'Install Helm 2.13.0'
+            inputs:
+              helmVersion: 2.13.0
+              checkLatestHelmVersion: false
+
+          - task: HelmDeploy@0
+            displayName: 'helm init'
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceConnection: rancher
+              command: init
+              arguments: '--service-account tiller'
+
+          - bash: 'helm repo add $(registryName) https://$(registryName).azurecr.io/helm/v1/repo --username $(registryLogin) --password $(registryPassword)'
+            displayName: 'helm repo add'
           - task: HelmDeploy@0
             displayName: 'helm upgrade'
             inputs:
