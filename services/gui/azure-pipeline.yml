@@ -52,7 +52,6 @@ stages:
 
     - bash: az acr helm push -n $(registryName) -u $(registryLogin) -p $(registryPassword) $(build.artifactStagingDirectory)/$(projectName)_$(build.sourceBranchName)-$(build.buildNumber).tgz
       displayName: 'az acr helm push'
-      
     - task: PublishPipelineArtifact@0
       displayName: 'Store Cypress Tests'
       inputs:
@@ -70,7 +69,6 @@ stages:
       inputs:
         workingDir: 'services/$(projectName)'
         verbose: false
-
     - task: Npm@1
       displayName: 'npm test (unit)'
       inputs:
@@ -103,10 +101,8 @@ stages:
           # setting path to code coverage report from istanbul in lcov format
           sonar.javascript.lcov.reportPaths=services/$(projectName)/coverage/lcov.info
           sonar.text=services/$(projectName)/test
-
     - task: SonarCloudAnalyze@1
       displayName: 'Run Code Analysis'
-
     - task: SonarCloudPublish@1
       displayName: 'Publish Quality Gate Result'
 
@@ -142,13 +138,12 @@ stages:
           - task: HelmDeploy@0
             displayName: 'helm upgrade'
             inputs:
-              azureSubscription: ''
-              azureResourceGroup: moveez
-              kubernetesCluster: moveez
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceConnection: rancher
               command: upgrade
               chartName: '$(registryName)/$(projectName)_$(Build.SourceBranchName)'
               releaseName: '$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName)'
-              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName)  --set stage=$(Release.EnvironmentName)'
+              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName) --set stage=$(Release.EnvironmentName)'
 
           - bash: |
               echo "sleep for 20 seconds"
@@ -160,6 +155,7 @@ stages:
   - deployment: Cypress
     pool:
       vmImage: 'ubuntu-16.04'
+    dependsOn: Deploy
     environment: 'uat'
     strategy:
       runOnce:
@@ -169,8 +165,7 @@ stages:
             displayName: 'Download Cypress Test'
             inputs:
               artifactName: '$(Build.BuildId)_cypress'
-
-          - task: eliostruyf.build-task.custom-build-task.file-creator@5
+          - task: file-creator@5
             displayName: 'Create Cypress Config'
             inputs:
               fileoverwrite: true
@@ -208,6 +203,7 @@ stages:
   - deployment: Lighthouse
     pool:
       vmImage: 'ubuntu-16.04'
+    dependsOn: Deploy
     environment: 'uat'
     strategy:
       runOnce:
@@ -252,13 +248,12 @@ stages:
           - task: HelmDeploy@0
             displayName: 'helm upgrade'
             inputs:
-              azureSubscription: ''
-              azureResourceGroup: moveez
-              kubernetesCluster: moveez
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceConnection: rancher
               command: upgrade
               chartName: '$(registryName)/$(projectName)_$(Build.SourceBranchName)'
               releaseName: '$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName)'
-              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName)  --set stage=$(Release.EnvironmentName)'
+              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName) --set stage=$(Release.EnvironmentName)'
 
           - bash: |
               echo "sleep for 20 seconds"
