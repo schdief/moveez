@@ -140,14 +140,14 @@ stages:
               kubernetesServiceConnection: rancher
               command: upgrade
               chartName: '$(registryName)/$(projectName)_$(Build.SourceBranchName)'
-              releaseName: '$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName)'
-              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName) --set stage=$(Release.EnvironmentName)'
+              releaseName: '$(projectName)-$(Build.SourceBranchName)-$(Environment.Name)'
+              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName) --set stage=$(Environment.Name)'
 
           - bash: |
               echo "sleep for 20 seconds"
               sleep 20
-              echo "curl https://$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName).moveez.de/health -v"
-              curl https://$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName).moveez.de/health -v
+              echo "curl https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de/health -v"
+              curl https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de/health -v
             displayName: Flightcheck
 
   - deployment: Cypress
@@ -171,7 +171,7 @@ stages:
               filecontent: |
                 {
                   "integrationFolder": "integration",
-                  "baseUrl": "https://$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName).moveez.de",
+                  "baseUrl": "https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de",
                   "projectId": "dhwwh4",
                   "reporter": "junit",
                   "reporterOptions": {
@@ -209,8 +209,8 @@ stages:
           steps:
           - download: none
           - bash: |
-              echo "perform lighthouse test with npx lighthouse-ci https://$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName).moveez.de --performance=60 --output=html"
-              npx lighthouse-ci https://$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName).moveez.de --performance=60 --output=html
+              echo "perform lighthouse test with npx lighthouse-ci https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de --performance=60 --output=html"
+              npx lighthouse-ci https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de --performance=60 --output=html
             displayName: 'Perform Lighthouse Test'
 
 - stage: PROD
@@ -250,12 +250,12 @@ stages:
               kubernetesServiceConnection: rancher
               command: upgrade
               chartName: '$(registryName)/$(projectName)_$(Build.SourceBranchName)'
-              releaseName: '$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName)'
-              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName) --set stage=$(Release.EnvironmentName)'
+              releaseName: '$(projectName)-$(Build.SourceBranchName)-$(Environment.Name)'
+              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName) --set stage=$(Environment.Name)'
 
           - bash: |
               echo "sleep for 20 seconds"
               sleep 20
-              echo "curl https://$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName).moveez.de/health -v"
-              curl https://$(projectName)-$(Build.SourceBranchName)-$(Release.EnvironmentName).moveez.de/health -v
+              echo "curl https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de/health -v"
+              curl https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de/health -v
             displayName: Flightcheck
