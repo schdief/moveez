@@ -1,5 +1,5 @@
 # About
-[![Build Status gui](https://dev.azure.com/Schdieflaw0018/moveez/_apis/build/status/gui?branchName=master)](https://dev.azure.com/Schdieflaw0018/moveez/_build/latest?definitionId=2&branchName=master)
+[![Build Status Gui](https://dev.azure.com/Schdieflaw0018/moveez/_apis/build/status/gui?branchName=master)](https://dev.azure.com/Schdieflaw0018/moveez/_build/latest?definitionId=15&branchName=master)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=schdief%3Amoveez-gui&metric=alert_status)](https://sonarcloud.io/dashboard?id=schdief%3Amoveez-gui)
 
 `Moveez` is a service to keep track of the movies you would like to watch in future. It shows you the ratings from sites like iMDB.com and Rottentomatoes.com.
@@ -15,9 +15,7 @@ Future updates might include:
 
 # CI/CD with Azure DevOps
 We have switched from Jenkins to Azure DevOps. You can find the workspace [here](https://dev.azure.com/Schdieflaw0018/moveez/).
-Within Azure DevOps we are using Azure Pipelines to build and release moveez.
-* The build configuration is done via `azure-build-pipeline.yml` per service.
-* The release is currently configured in GUI due to [lack of support of release config files](https://dev.azure.com/mseng/AzureDevOpsRoadmap/_workitems/edit/1364226/). Nevertheless we already store the release config in `azure-release-pipeline.yaml`.
+Within Azure DevOps we are using Azure Pipelines to build and release moveez. The pipeline configuration is done via `azure-pipeline.yml` per service.
 
 ## Code analysis with sonarcloud.io
 We use sonarcloud.io for our static code analysis. It is automaticly triggered for all branches as a parallel step to the build. The results are published to Azure DevOps and a [dashboard](https://sonarcloud.io/organizations/schdief-github/projects).
