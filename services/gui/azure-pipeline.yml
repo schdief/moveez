@@ -168,7 +168,7 @@ stages:
             displayName: 'Create Cypress Config'
             inputs:
               fileoverwrite: true
-              filepath: services/gui/cypress.json
+              filepath: '$(Pipeline.Workspace)/services/gui/cypress.json'
               filecontent: |
                 {
                   "integrationFolder": "integration",
