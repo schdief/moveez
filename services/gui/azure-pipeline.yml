@@ -19,134 +19,134 @@ variables:
 stages:
 - stage: BUILD
   jobs:
-  - job: Docker
-    pool:
-      vmImage: 'ubuntu-16.04'
-    steps:
-    - bash: docker build -f $(system.defaultWorkingDirectory)/services/$(projectName)/Dockerfile -t $(registryServerName)/$(imageName):$(build.buildNumber)_$(build.sourceBranchName) -t $(registryServerName)/$(imageName):latest $(system.defaultWorkingDirectory)/services/$(projectName)
-      displayName: 'docker build'
-
-    - bash: docker login $(registryServerName) -u $(registryLogin) -p $(registryPassword)
-      displayName: 'docker login'
-
-    - bash: |
-        docker push $(registryServerName)/$(imageName):$(build.buildNumber)_$(build.sourceBranchName)
-        docker push $(registryServerName)/$(imageName):latest
-      displayName: 'docker push'
+#  - job: Docker
+#    pool:
+#      vmImage: 'ubuntu-16.04'
+#    steps:
+#    - bash: docker build -f $(system.defaultWorkingDirectory)/services/$(projectName)/Dockerfile -t $(registryServerName)/$(imageName):$(build.buildNumber)_$(build.sourceBranchName) -t $(registryServerName)/$(imageName):latest $(system.defaultWorkingDirectory)/services/$(projectName)
+#      displayName: 'docker build'
+#
+#    - bash: docker login $(registryServerName) -u $(registryLogin) -p $(registryPassword)
+#      displayName: 'docker login'
+#
+#    - bash: |
+#        docker push $(registryServerName)/$(imageName):$(build.buildNumber)_$(build.sourceBranchName)
+#        docker push $(registryServerName)/$(imageName):latest
+#      displayName: 'docker push'
       
   - job: Helm
     steps:  
-    - task: HelmInstaller@0
-      displayName: 'Install Helm'
-      inputs:
-        helmVersion: 2.13.0
-
-    - bash: sed -i 's/$(projectName)/$(projectName)_$(build.sourceBranchName)/g' $(system.defaultWorkingDirectory)/services/$(projectName)/charts/$(projectName)/Chart.yaml
-      displayName: 'update Chart.yaml with branch name'
-
-    - bash: mv $(system.defaultWorkingDirectory)/services/$(projectName)/charts/$(projectName) $(system.defaultWorkingDirectory)/services/$(projectName)/charts/$(projectName)_$(build.sourceBranchName)
-      displayName: 'renaming chart folder to match Chart.yaml name'
-
-    - bash: helm package --version $(build.BuildNumber) --destination $(build.artifactStagingDirectory) $(system.defaultWorkingDirectory)/services/$(projectName)/charts/$(projectName)_$(build.sourceBranchName)
-      displayName: 'helm package'
-
-    - bash: az acr helm push -n $(registryName) -u $(registryLogin) -p $(registryPassword) $(build.artifactStagingDirectory)/$(projectName)_$(build.sourceBranchName)-$(build.buildNumber).tgz
-      displayName: 'az acr helm push'
+#    - task: HelmInstaller@0
+#      displayName: 'Install Helm'
+#      inputs:
+#        helmVersion: 2.13.0
+#
+#    - bash: sed -i 's/$(projectName)/$(projectName)_$(build.sourceBranchName)/g' $(system.defaultWorkingDirectory)/services/$(projectName)/charts/$(projectName)/Chart.yaml
+#      displayName: 'update Chart.yaml with branch name'
+#
+#    - bash: mv $(system.defaultWorkingDirectory)/services/$(projectName)/charts/$(projectName) $(system.defaultWorkingDirectory)/services/$(projectName)/charts/$(projectName)_$(build.sourceBranchName)
+#      displayName: 'renaming chart folder to match Chart.yaml name'
+#
+#    - bash: helm package --version $(build.BuildNumber) --destination $(build.artifactStagingDirectory) $(system.defaultWorkingDirectory)/services/$(projectName)/charts/$(projectName)_$(build.sourceBranchName)
+#      displayName: 'helm package'
+#
+#    - bash: az acr helm push -n $(registryName) -u $(registryLogin) -p $(registryPassword) $(build.artifactStagingDirectory)/$(projectName)_$(build.sourceBranchName)-$(build.buildNumber).tgz
+#      displayName: 'az acr helm push'
     - task: PublishPipelineArtifact@0
       displayName: 'Store Cypress Tests'
       inputs:
         artifactName: '$(Build.BuildId)_cypress'
         targetPath: services/gui/cypress
 
-  - job: Scan
-    pool:
-      vmImage: 'ubuntu-16.04'
-      demands: java
-
-    steps:
-    - task: Npm@1
-      displayName: 'npm install (dependencies)'
-      inputs:
-        workingDir: 'services/$(projectName)'
-        verbose: false
-    - task: Npm@1
-      displayName: 'npm test (unit)'
-      inputs:
-        command: custom
-        workingDir: 'services/$(projectName)'
-        verbose: false
-        customCommand: test
-        
-    - bash: 'npx prettier --check "test/**/*.js" "app/**/*.js" "cypress/integration/**/*.js"'
-      workingDirectory: $(system.defaultWorkingDirectory)/services/$(projectName)
-      displayName: 'check code formatting'
-
-    - task: PublishCodeCoverageResults@1
-      displayName: 'Publish code coverage from istanbul via cobertura'
-      inputs:
-        codeCoverageTool: Cobertura
-        summaryFileLocation: 'services/$(projectName)/coverage/cobertura-coverage.xml'
-    - task: SonarCloudPrepare@1
-      displayName: 'Prepare analysis on SonarCloud'
-      inputs:
-        SonarCloud: azuredevops
-        organization: 'schdief-github'
-        scannerMode: CLI
-        configMode: manual
-        cliProjectKey: 'schdief:moveez-$(projectName)'
-        cliProjectName: 'moveez-$(projectName)'
-        cliSources: services/$(projectName)
-        extraProperties: |
-          # setting path to code coverage report from istanbul in lcov format
-          sonar.javascript.lcov.reportPaths=services/$(projectName)/coverage/lcov.info
-          sonar.text=services/$(projectName)/test
-    - task: SonarCloudAnalyze@1
-      displayName: 'Run Code Analysis'
-    - task: SonarCloudPublish@1
-      displayName: 'Publish Quality Gate Result'
-
+#  - job: Scan
+#    pool:
+#      vmImage: 'ubuntu-16.04'
+#      demands: java
+#
+#    steps:
+#    - task: Npm@1
+#      displayName: 'npm install (dependencies)'
+#      inputs:
+#        workingDir: 'services/$(projectName)'
+#        verbose: false
+#    - task: Npm@1
+#      displayName: 'npm test (unit)'
+#      inputs:
+#        command: custom
+#        workingDir: 'services/$(projectName)'
+#        verbose: false
+#        customCommand: test
+#        
+#    - bash: 'npx prettier --check "test/**/*.js" "app/**/*.js" "cypress/integration/**/*.js"'
+#      workingDirectory: $(system.defaultWorkingDirectory)/services/$(projectName)
+#      displayName: 'check code formatting'
+#
+#    - task: PublishCodeCoverageResults@1
+#      displayName: 'Publish code coverage from istanbul via cobertura'
+#      inputs:
+#        codeCoverageTool: Cobertura
+#        summaryFileLocation: 'services/$(projectName)/coverage/cobertura-coverage.xml'
+#    - task: SonarCloudPrepare@1
+#      displayName: 'Prepare analysis on SonarCloud'
+#      inputs:
+#        SonarCloud: azuredevops
+#        organization: 'schdief-github'
+#        scannerMode: CLI
+#        configMode: manual
+#        cliProjectKey: 'schdief:moveez-$(projectName)'
+#        cliProjectName: 'moveez-$(projectName)'
+#        cliSources: services/$(projectName)
+#        extraProperties: |
+#          # setting path to code coverage report from istanbul in lcov format
+#          sonar.javascript.lcov.reportPaths=services/$(projectName)/coverage/lcov.info
+#          sonar.text=services/$(projectName)/test
+#    - task: SonarCloudAnalyze@1
+#      displayName: 'Run Code Analysis'
+#    - task: SonarCloudPublish@1
+#      displayName: 'Publish Quality Gate Result'
+#
 - stage: UAT
   jobs:
-  - deployment: Deploy
-    pool:
-      vmImage: 'ubuntu-16.04'
-    environment: 'uat'
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: none
-          - task: HelmInstaller@0
-            displayName: 'Install Helm 2.13.0'
-            inputs:
-              helmVersion: 2.13.0
-              checkLatestHelmVersion: false
-          - task: HelmDeploy@0
-            displayName: 'helm init'
-            inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceConnection: rancher
-              command: init
-              arguments: '--service-account tiller'
-
-          - bash: 'helm repo add $(registryName) https://$(registryName).azurecr.io/helm/v1/repo --username $(registryLogin) --password $(registryPassword)'
-            displayName: 'helm repo add'
-          - task: HelmDeploy@0
-            displayName: 'helm upgrade'
-            inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceConnection: rancher
-              command: upgrade
-              chartName: '$(registryName)/$(projectName)_$(Build.SourceBranchName)'
-              releaseName: '$(projectName)-$(Build.SourceBranchName)-$(Environment.Name)'
-              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName) --set stage=$(Environment.Name)'
-
-          - bash: |
-              echo "sleep for 20 seconds"
-              sleep 20
-              echo "curl https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de/health -v"
-              curl https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de/health -v
-            displayName: Flightcheck
+#  - deployment: Deploy
+#    pool:
+#      vmImage: 'ubuntu-16.04'
+#    environment: 'uat'
+#    strategy:
+#      runOnce:
+#        deploy:
+#          steps:
+#          - download: none
+#          - task: HelmInstaller@0
+#            displayName: 'Install Helm 2.13.0'
+#            inputs:
+#              helmVersion: 2.13.0
+#              checkLatestHelmVersion: false
+#          - task: HelmDeploy@0
+#            displayName: 'helm init'
+#            inputs:
+#              connectionType: 'Kubernetes Service Connection'
+#              kubernetesServiceConnection: rancher
+#              command: init
+#              arguments: '--service-account tiller'
+#
+#          - bash: 'helm repo add $(registryName) https://$(registryName).azurecr.io/helm/v1/repo --username $(registryLogin) --password $(registryPassword)'
+#            displayName: 'helm repo add'
+#          - task: HelmDeploy@0
+#            displayName: 'helm upgrade'
+#            inputs:
+#              connectionType: 'Kubernetes Service Connection'
+#              kubernetesServiceConnection: rancher
+#              command: upgrade
+#              chartName: '$(registryName)/$(projectName)_$(Build.SourceBranchName)'
+#              releaseName: '$(projectName)-$(Build.SourceBranchName)-$(Environment.Name)'
+#              arguments: '--version $(build.BuildNumber) --set image.repository=$(registryName).azurecr.io/$(projectName) --set image.tag=$(build.BuildNumber)_$(Build.SourceBranchName) --set ingress.enabled=false --set branchName=$(Build.SourceBranchName) --set stage=$(Environment.Name)'
+#
+#          - bash: |
+#              echo "sleep for 20 seconds"
+#              sleep 20
+#              echo "curl https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de/health -v"
+#              curl https://$(projectName)-$(Build.SourceBranchName)-$(Environment.Name).moveez.de/health -v
+#            displayName: Flightcheck
 
   - deployment: Cypress
     pool:
