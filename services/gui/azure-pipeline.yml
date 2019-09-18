@@ -199,7 +199,7 @@ stages:
   - deployment: Lighthouse
     pool:
       vmImage: 'ubuntu-16.04'
-    dependsOn: Deploy
+#    dependsOn: Deploy
     environment: 'uat'
     strategy:
       runOnce:
