@@ -168,7 +168,7 @@ stages:
             displayName: 'Create Cypress Config'
             inputs:
               fileoverwrite: true
-              filepath: cypress.json
+              filepath: services/gui/cypress.json
               filecontent: |
                 {
                   "integrationFolder": "integration",
