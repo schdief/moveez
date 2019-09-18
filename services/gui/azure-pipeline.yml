@@ -161,8 +161,9 @@ stages:
           - task: DownloadPipelineArtifact@1
             displayName: 'Download Cypress Test'
             inputs:
-              artifactName: '$(Build.BuildId)_cypress'
               buildType: 'current'
+              artifactName: '$(Build.BuildId)_cypress'
+              itemPattern: '*.*'
               targetPath: '$(Pipeline.Workspace)/services/gui/cypress'
           - task: file-creator@5
             displayName: 'Create Cypress Config'
