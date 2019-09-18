@@ -163,7 +163,6 @@ stages:
             inputs:
               buildType: 'current'
               artifactName: '$(Build.BuildId)_cypress'
-              itemPattern: '*.*'
               targetPath: '$(Pipeline.Workspace)/services/gui/cypress'
           - task: file-creator@5
             displayName: 'Create Cypress Config'
@@ -187,6 +186,7 @@ stages:
 
           - bash: |
               echo "run cypress test via npx"
+              cd ..
               ls
 #              npx cypress run --record --key feabec01-1876-48b8-a342-afa3f885793b --ci-build-id $(build.BuildNumber)_$(Build.SourceBranchName) --parallel
             displayName: 'Perform Cypress Test'
