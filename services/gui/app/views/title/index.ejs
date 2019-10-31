@@ -6,9 +6,9 @@
 <div class="container-fluid">
     <div class="form-group">
         <div class="input-group input-group-lg">
-            <input id="searchNewTitle" type="text" class="form-control" id="newTitle" placeholder="search to add..." name="title[name]" required autocomplete="off" onkeyup="suggestTitle()" onblur="hideSuggestions()">
+            <input id="searchNewTitle" type="text" class="form-control" id="newTitle" placeholder="search to add..." name="title[name]" required autocomplete="off" onkeyup="moveez.suggestTitle()" onblur="moveez.hideSuggestions()">
             <div class="input-group-append">
-                <i class="fas fa-search input-group-text" onclick="activateSearchBar()"></i>
+                <i class="fas fa-search input-group-text" onclick="moveez.activateSearchBar()"></i>
             </div>
         </div>
         <div class="container-fluid p-0" id="results"></div>
@@ -21,7 +21,7 @@
         <div id="watchList" class="col-lg-8">
             <% titles.forEach(function(title){ %>
                 <% if(!title.seen) { %>
-                    <div class="card mb-3">
+                    <div id="watch-list-item-<%=title.imdbID%>" class="card mb-3">
                         <div class="row no-gutters">
                             <div class="col maximumWidthForPoster">
                                 <img src="<%= title.poster %>" class="card-img posterSize" loading="lazy" alt="cover">
@@ -67,8 +67,8 @@
                                         <% } %>
                                     </li>
                                     <li class="list-group-item">
-                                        <button id="toggleSeenStatusButton" class="btn btn-secondary card-link py-1 px-2" onclick="toggleSeenStatus('<%= title.id %>', '<%= escapeName(title.name) %>', true)" data-tooltip="Watched '<%= title.name %>'" data-inverted=""><i class="fas fa-check"></i></button>
-                                        <button id="deleteButton" class="btn btn-danger card-link py-1 px-2" onclick="prepareDeleteModal('<%= escapeName(title.name) %>', '<%= title._id %>');" data-tooltip="Remove '<%= title.name %>'" data-inverted=""><i class="fas fa-trash"></i></button>   
+                                        <button id="toggleSeenStatusButton" class="btn btn-secondary card-link py-1 px-2" onclick="moveez.toggleSeenStatus('<%= title.id %>', '<%= escapeName(title.name) %>', true)" data-tooltip="Watched '<%= title.name %>'" data-inverted=""><i class="fas fa-check"></i></button>
+                                        <button id="deleteButton" class="btn btn-danger card-link py-1 px-2" onclick="moveez.prepareDeleteModal('<%= escapeName(title.name) %>', '<%= title._id %>');" data-tooltip="Remove '<%= title.name %>'" data-inverted=""><i class="fas fa-trash"></i></button>   
                                     </li>
                                 </ul>
                             </div>
@@ -116,8 +116,8 @@
                                         <h6 class="card-title mb-1"><%= title.name %></h6>
                                     </div>
                                         <li class="list-group-item py-1">
-                                            <button id="toggleSeenStatusButton" class="btn btn-secondary card-link py-1 px-2" onclick="toggleSeenStatus('<%= title.id %>', '<%= escapeName(title.name) %>', false)" data-tooltip="(Re-)Watch '<%= title.name %>'" data-inverted=""><i class="fas fa-redo"></i></button>
-                                            <button id="deleteButton" class="btn btn-danger card-link py-1 px-2" onclick="prepareDeleteModal('<%= escapeName(title.name) %>', '<%= title._id %>');" data-tooltip="Remove '<%= title.name %>'" data-inverted=""><i class="fas fa-trash"></i></button>   
+                                            <button id="toggleSeenStatusButton" class="btn btn-secondary card-link py-1 px-2" onclick="moveez.toggleSeenStatus('<%= title.id %>', '<%= escapeName(title.name) %>', false)" data-tooltip="(Re-)Watch '<%= title.name %>'" data-inverted=""><i class="fas fa-redo"></i></button>
+                                            <button id="deleteButton" class="btn btn-danger card-link py-1 px-2" onclick="moveez.prepareDeleteModal('<%= escapeName(title.name) %>', '<%= title._id %>');" data-tooltip="Remove '<%= title.name %>'" data-inverted=""><i class="fas fa-trash"></i></button>   
                                         </li>
                                     </ul>
                                 </div>
@@ -164,6 +164,18 @@
             </div>
         </div>
     </div>
-</div>    
+</div>
+
+<script type="module">
+    import { moveez } from "/moveez.js";
+    moveez.titles = [
+        <% titles.forEach(function(title){ %>
+            <% if(!title.seen) { %>
+                {imdbID:"<%= title.imdbID %>"},
+            <% } %>
+        <% }); %>
+    ]
+
+</script>
 
 <% include ../partials/footer %>

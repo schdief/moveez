@@ -5,6 +5,7 @@
   "main": "app.js",
   "scripts": {
     "test": "cd ./app && NODE_ENV='test' PORT='8082' NODE_CONFIG_DIR='../config' RELEASE='mocha test' nyc --reporter=lcov --reporter=text --reporter=cobertura mocha --timeout 20000 --full-trace ../test/integration/*Test.js",
+    "frontend-test": "karma start",
     "start": "cd app && NODE_CONFIG_DIR='../config' node .",
     "watch": "nodemon -e js,ejs,css --watch ./app --exec npm run dev",
     "dev": "cd ./app && KETCHUP_ENDPOINT='localhost:8083' PORT='8443' TLS_CRT_PATH='../tlscert/server.crt' TLS_KEY_PATH='../tlscert/server.key' FACEBOOK_APP_SECRET_PATH='../facebook/app_secret' NODE_CONFIG_DIR='../config' node .",
@@ -49,14 +50,19 @@
     "chai": "^3.5.0",
     "chai-http": "^2.0.1",
     "file-loader": "^2.0.0",
+    "karma": "^4.4.1",
+    "karma-chai": "^0.1.0",
+    "karma-chrome-launcher": "^3.1.0",
+    "karma-mocha": "^1.3.0",
     "mocha": "^2.4.5",
     "nodemon": "^1.18.4",
     "nyc": "^11.4.1",
+    "prettier": "^1.18.2",
     "react": "^16.6.3",
     "react-dom": "^16.6.3",
     "sinon": "^7.2.7"
   },
   "optionalDependencies": {
-    "cypress": "^3.2.0"
+    "cypress": "^3.5.0"
   }
 }
