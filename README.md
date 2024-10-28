@@ -2,7 +2,7 @@
 [![Build Status Gui](https://dev.azure.com/Schdieflaw0018/moveez/_apis/build/status/gui?branchName=master)](https://dev.azure.com/Schdieflaw0018/moveez/_build/latest?definitionId=15&branchName=master)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=schdief%3Amoveez-gui&metric=alert_status)](https://sonarcloud.io/dashboard?id=schdief%3Amoveez-gui)
 
-`Moveez` is a service to keep track of the movies you would like to watch in future. It shows you the ratings from sites like iMDB.com and Rottentomatoes.com.
+`Moveez` is a service to keep track of the movies you would like to watch in the future. It shows you the ratings from sites like iMDB.com and Rottentomatoes.com.
 
 [Visit us at www.moveez.de](https://www.moveez.de)
 
