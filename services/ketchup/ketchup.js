@@ -1,93 +1,59 @@
-var express = require("express"),
-  app = express(),
-  HttpStatus = require("http-status-codes"),
-  morgan = require("morgan");
+const { Pool } = require("pg"); // Importing the PostgreSQL client
 
-const cheerio = require("cheerio");
-const superagent = require("superagent");
-
-//LOGGING
-//don't show log when it is test
-if (process.env.NODE_ENV !== "test") {
-  //use morgan to log at command line with Apache style
-  app.use(morgan("combined"));
-}
-
-//healtcheck
-app.get("/health", function(req, res) {
-  res.status(HttpStatus.OK);
-  res.send();
+// Database connection setup
+const pool = new Pool({
+  user: "your_username", // Update with your PostgreSQL username
+  host: "localhost",
+  database: "your_database", // Update with your PostgreSQL database name
+  password: "your_password", // Update with your PostgreSQL password
+  port: 5432,
 });
 
-//nothing to look for
-app.get("/", function(req, res) {
-  res.redirect("/empty");
-});
-
-const baseURL = "https://www.rottentomatoes.com/m/";
-
-app.get("/:id", function(req, res) {
+// Update the rating logic
+app.get("/:id", async function(req, res) {
   console.log("INF: Request for " + req.params.id);
 
-  //check whether URL is empty
   if (req.params.id !== "empty") {
-    //TODO: check database for valid entry to avoid asking rotten tomatoes again
-    //get HTML of requested URL
-    superagent.get(baseURL + req.params.id).end((err, response) => {
-      if (err) {
-        error = `ERR: got a ${err.status} for ${baseURL}${req.params.id} 😭😭😭`;
-        console.log(error);
-        res.status(HttpStatus.INTERNAL_SERVER_ERROR);
-        res.send(error);
+    try {
+      // Check the database for an existing rating
+      const result = await pool.query("SELECT rating FROM ratings WHERE id = $1", [req.params.id]);
+      if (result.rows.length > 0) {
+        const tomatoUserRating = result.rows[0].rating;
+        console.log(`INF: Got it! ✌️  Rating is: ${tomatoUserRating} for ${req.params.id}`);
+        res.status(HttpStatus.OK).json({ tomatoUserRating });
       } else {
-        //parse HTML for tomatoUserRating
-        var $ = cheerio.load(response.text);
-        var tomatoUserRatingRaw = $("span.mop-ratings-wrap__percentage")
-          .eq(1)
-          .text();
-        //check whether rating could be found
-        const indexOfPercentageCharacter = tomatoUserRatingRaw.indexOf("%");
-        if (indexOfPercentageCharacter != -1) {
-          //cut off % of rating
-          var tomatoUserRating = tomatoUserRatingRaw.substring(
-            0,
-            indexOfPercentageCharacter
-          );
-          //remove white space
-          tomatoUserRating = tomatoUserRating.replace(/\s/g, "");
-          //TODO: check whether rating can be - or N/A or similar and act
-          //respond with rating
-          console.log(
-            `INF: Got it! ✌️  Rating is: ${tomatoUserRating} for ${req.params.id}`
-          );
-          res.status(HttpStatus.OK);
-          res.json({ tomatoUserRating });
-          //TODO: save rating in database to cache result
-        } else {
-          error = `ERR: couldn't find a rating for ${req.params.id} - sorry 😭😭😭`;
-          console.log(error);
-          res.send(error);
-        }
+        // Fetch from Rotten Tomatoes if not found in the database
+        superagent.get(baseURL + req.params.id).end(async (err, response) => {
+          if (err) {
+            error = `ERR: got a ${err.status} for ${baseURL}${req.params.id} 😭😭😭`;
+            console.log(error);
+            res.status(HttpStatus.INTERNAL_SERVER_ERROR).send(error);
+          } else {
+            var $ = cheerio.load(response.text);
+            var tomatoUserRatingRaw = $("span.mop-ratings-wrap__percentage").eq(1).text();
+            const indexOfPercentageCharacter = tomatoUserRatingRaw.indexOf("%");
+            if (indexOfPercentageCharacter != -1) {
+              var tomatoUserRating = tomatoUserRatingRaw.substring(0, indexOfPercentageCharacter).replace(/\s/g, "");
+              console.log(`INF: Got it! ✌️  Rating is: ${tomatoUserRating} for ${req.params.id}`);
+              res.status(HttpStatus.OK).json({ tomatoUserRating });
+
+              // Save the rating in the database
+              await pool.query("INSERT INTO ratings (id, rating) VALUES ($1, $2)", [req.params.id, tomatoUserRating]);
+            } else {
+              error = `ERR: couldn't find a rating for ${req.params.id} - sorry 😭😭😭`;
+              console.log(error);
+              res.send(error);
+            }
+          }
+        });
       }
-    });
+    } catch (error) {
+      console.error("Database error:", error);
+      res.status(HttpStatus.INTERNAL_SERVER_ERROR).send("Database error");
+    }
   } else {
     error = "ERR: URL missing 😭";
     console.log(error);
-    res.status(HttpStatus.EXPECTATION_FAILED);
-    res.send(error);
+    res.status(HttpStatus.EXPECTATION_FAILED).send(error);
   }
 });
-
-//PORT is defined by environment variable or 80
-const PORT = process.env.PORT || 80;
-const HOST = "0.0.0.0";
-const MODE = process.env.NODE_ENV || "default";
-const RELEASE = process.env.RELEASE || "snapshot";
-app.listen(PORT, HOST, () => {
-  console.log("🍅🍅🍅 KETCHUP - happy squeezing!");
-  console.log(RELEASE + " started on " + HOST + ":" + PORT);
-  console.log("mode: " + MODE);
-});
-
-//expose for integration testing with mocha
-module.exports = app;
