@@ -20,3 +20,22 @@ EXPOSE 80
 
 # start moveez
 CMD [ "npm", "start" ]
+
+# Use the official Go image
+FROM golang:1.20
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the Go source code
+COPY . .
+
+# Install dependencies
+RUN go get -u github.com/PuerkitoBio/goquery
+
+# Expose the port
+EXPOSE 80
+
+# Command to run the application
+CMD ["go", "run", "ketchup.go"]
+
