@@ -8,16 +8,16 @@
 #     - myRegistryKeySecretName
 
 image:
-  ## Bitnami MongoDB registry
+  ## Bitnami PostgreSQL registry
   ##
   registry: docker.io
-  ## Bitnami MongoDB image name
+  ## Bitnami PostgreSQL image name
   ##
-  repository: bitnami/mongodb
-  ## Bitnami MongoDB image tag
-  ## ref: https://hub.docker.com/r/bitnami/mongodb/tags/
+  repository: bitnami/postgresql
+  ## Bitnami PostgreSQL image tag
+  ## ref: https://hub.docker.com/r/bitnami/postgresql/tags/
   ##
-  tag: 4.0.10-debian-9-r0
+  tag: 11.9.0-debian-10-r0
 
   ## Specify a imagePullPolicy
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -36,46 +36,41 @@ image:
   debug: false
 
 ## Enable authentication
-## ref: https://docs.mongodb.com/manual/tutorial/enable-authentication/
+## ref: https://www.postgresql.org/docs/current/auth-pg-hba-conf.html
 #
 usePassword: true
 # existingSecret: name-of-existing-secret
 
-## MongoDB admin password
-## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#setting-the-root-password-on-first-run
+## PostgreSQL admin password
+## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#setting-the-root-password-on-first-run
 ##
-# mongodbRootPassword:
+# postgresqlRootPassword:
 
-## MongoDB custom user and database
-## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#creating-a-user-and-database-on-first-run
+## PostgreSQL custom user and database
+## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#creating-a-user-and-database-on-first-run
 ##
-# mongodbUsername: username
-# mongodbPassword: password
-# mongodbDatabase: database
+# postgresqlUsername: username
+# postgresqlPassword: password
+# postgresqlDatabase: database
 
-## Whether enable/disable IPv6 on MongoDB
-## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#enabling/disabling-ipv6
+## Whether enable/disable IPv6 on PostgreSQL
+## ref: https://github.com/bitnami/bitnami-docker-postgresql/blob/master/README.md#enabling/disabling-ipv6
 ##
-mongodbEnableIPv6: true
+postgresqlEnableIPv6: true
 
-## Whether enable/disable DirectoryPerDB on MongoDB
-## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#enabling/disabling-directoryperdb
+## PostgreSQL System Log configuration
+## ref: https://github.com/bitnami/bitnami-docker-postgresql#configuring-system-log-verbosity-level
 ##
-mongodbDirectoryPerDB: false
+postgresqlSystemLogVerbosity: 0
+postgresqlDisableSystemLog: false
 
-## MongoDB System Log configuration
-## ref: https://github.com/bitnami/bitnami-docker-mongodb#configuring-system-log-verbosity-level
-##
-mongodbSystemLogVerbosity: 0
-mongodbDisableSystemLog: false
-
-## MongoDB additional command line flags
+## PostgreSQL additional command line flags
 ##
 ## Can be used to specify command line flags, for example:
 ##
-## mongodbExtraFlags:
-##  - "--wiredTigerCacheSizeGB=2"
-mongodbExtraFlags: []
+## postgresqlExtraFlags:
+##  - "--max_connections=100"
+postgresqlExtraFlags: []
 
 ## Pod Security Context
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
@@ -93,7 +88,7 @@ service:
   annotations: {}
   type: ClusterIP
   # clusterIP: None
-  port: 27017
+  port: 5432
 
   ## Specify the nodePort value for the LoadBalancer and NodePort service types.
   ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
@@ -111,18 +106,18 @@ service:
 
 
 ## Setting up replication
-## ref: https://github.com/bitnami/bitnami-docker-mongodb#setting-up-a-replication
+## ref: https://github.com/bitnami/bitnami-docker-postgresql#setting-up-a-replication
 #
-replicaSet:
-  ## Whether to create a MongoDB replica set for high availability or not
+replication:
+  ## Whether to create a PostgreSQL replication for high availability or not
   enabled: true
   useHostnames: true
 
-  ## Name of the replica set
+  ## Name of the replication
   ##
-  name: rs0
+  name: pg-replication
 
-  ## Key used for replica set authentication
+  ## Key used for replication authentication
   ##
   # key: key
 
@@ -130,16 +125,14 @@ replicaSet:
   ##
   replicas:
     secondary: 1
-    arbiter: 1
   ## Pod Disruption Budget
   ## ref: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/
   pdb:
     minAvailable:
       primary: 1
       secondary: 1
-      arbiter: 1
 
-# Annotations to be added to MongoDB pods
+# Annotations to be added to PostgreSQL pods
 podAnnotations: {}
 
 # Additional pod labels to apply
@@ -177,7 +170,7 @@ affinity: {}
 ## ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
 tolerations: []
 
-## updateStrategy for MongoDB Primary, Secondary and Arbitrer statefulsets
+## updateStrategy for PostgreSQL Primary and Secondary statefulsets
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies
 updateStrategy:
   type: RollingUpdate
@@ -194,16 +187,16 @@ persistence:
   # existingClaim:
 
   ## The path the volume will be mounted at, useful when using different
-  ## MongoDB images.
+  ## PostgreSQL images.
   ##
-  mountPath: /bitnami/mongodb
+  mountPath: /bitnami/postgresql
 
   ## The subdirectory of the volume to mount to, useful in dev environments
   ## and one PV for multiple services.
   ##
   subPath: ""
 
-  ## mongodb data Persistent Volume Storage Class
+  ## postgresql data Persistent Volume Storage Class
   ## If defined, storageClassName: <storageClass>
   ## If set to "-", storageClassName: "", which disables dynamic provisioning
   ## If undefined (the default) or set to null, no storageClassName spec is
@@ -216,7 +209,7 @@ persistence:
   size: 10Gi
   annotations: {}
 
-# Expose mongodb via ingress. This is possible if using nginx-ingress
+# Expose postgresql via ingress. This is possible if using nginx-ingress
 # https://kubernetes.github.io/ingress-nginx/user-guide/exposing-tcp-udp-services/
 ingress:
   enabled: false
@@ -259,11 +252,11 @@ readinessProbe:
 initConfigMap: {}
 #  name: "init-config-map"
 
-# Entries for the MongoDB config file
+# Entries for the PostgreSQL config file
 configmap:
 #  # Where and how to store data.
 #  storage:
-#    dbPath: /opt/bitnami/mongodb/data/db
+#    dbPath: /opt/bitnami/postgresql/data/db
 #    journal:
 #      enabled: true
 #    #engine:
@@ -272,28 +265,28 @@ configmap:
 #  systemLog:
 #    destination: file
 #    logAppend: true
-#    path: /opt/bitnami/mongodb/logs/mongodb.log
+#    path: /opt/bitnami/postgresql/logs/postgresql.log
 #  # network interfaces
 #  net:
-#    port: 27017
+#    port: 5432
 #    bindIp: 0.0.0.0
 #    unixDomainSocket:
 #      enabled: true
-#      pathPrefix: /opt/bitnami/mongodb/tmp
-#  # replica set options
+#      pathPrefix: /opt/bitnami/postgresql/tmp
+#  # replication options
 #  replication:
-#    replSetName: replicaset
+#    replSetName: replication
 #  # process management options
 #  processManagement:
 #     fork: false
-#     pidFilePath: /opt/bitnami/mongodb/tmp/mongodb.pid
+#     pidFilePath: /opt/bitnami/postgresql/tmp/postgresql.pid
 #  # set parameter options
 #  setParameter:
 #     enableLocalhostAuthBypass: true
 #  # security options
 #  security:
 #    authorization: enabled
-#    keyFile: /opt/bitnami/mongodb/conf/keyfile
+#    keyFile: /opt/bitnami/postgresql/conf/keyfile
 
 ## Prometheus Exporter / Metrics
 ##
@@ -302,7 +295,7 @@ metrics:
 
   image:
     registry: docker.io
-    repository: forekshub/percona-mongodb-exporter
+    repository: forekshub/percona-postgresql-exporter
     tag: latest
     pullPolicy: IfNotPresent
     ## Optionally specify an array of imagePullSecrets.
@@ -313,7 +306,7 @@ metrics:
     #   - myRegistryKeySecretName
 
   ## String with extra arguments to the metrics exporter
-  ## ref: https://github.com/dcu/mongodb_exporter/blob/master/mongodb_exporter.go
+  ## ref: https://github.com/dcu/postgresql_exporter/blob/master/postgresql_exporter.go
   extraArgs: ""
 
   ## Metrics exporter resource requests and limits
@@ -341,7 +334,7 @@ metrics:
   ## Metrics exporter pod Annotation
   podAnnotations:
     prometheus.io/scrape: "true"
-    prometheus.io/port: "9216"
+    prometheus.io/port: "9187"
 
   ## Prometheus Service Monitor
   ## ref: https://github.com/coreos/prometheus-operator

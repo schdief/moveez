@@ -1,132 +1,131 @@
-var Title = require("../models/title"),
-  mongoose = require("mongoose"),
-  HttpStatus = require("http-status-codes");
-
+const { Title } = require("../models/title");
+const HttpStatus = require("http-status-codes");
 const superagent = require("superagent");
 
 //CREATE POST /title to add a new title
-function postTitle(req, res) {
+async function postTitle(req, res) {
   //metrics, but not during test
   if (process.env.NODE_ENV !== "test") {
     console.log("metrics.postTitle");
   }
 
-  var newTitle = new Title({ ...req.body.title, user: req.user.id });
+  const newTitle = {
+    ...req.body.title,
+    user: req.user.id,
+    imdbRating: req.body.title.imdbRating || -1,
+  };
 
-  //some titles have no imdbRating, we need to avoid crashing the db (#59)
-  if (!newTitle.imdbRating) {
-    newTitle.imdbRating = -1;
-  }
-
-  //TODO: switch to https (self-signed)
-  //TODO: check tomatoURL upfront, if empty skip ketchup request - needs promises
   //get path of tomatoURL
-  var path;
-
+  let path;
   if (req.body.title.tomatoURL) {
     path = req.body.title.tomatoURL.substring(
       req.body.title.tomatoURL.indexOf("m/") + 4
     );
   }
 
-  superagent
-    .get(`http://${process.env.KETCHUP_ENDPOINT}/${path}`)
-    .end((err, response) => {
-      if (err) {
-        console.log(
-          `WAR: 🍅 KETCHUP failed us 😭, assuming there is no rating, here is the reason: ${err}`
-        );
-        newTitle.tomatoUserRating = -1;
-      } else {
-        newTitle.tomatoUserRating = response.body.tomatoUserRating;
-      }
+  try {
+    const response = await superagent.get(
+      `http://${process.env.KETCHUP_ENDPOINT}/${path}`
+    );
+    newTitle.tomatoUserRating = response.body.tomatoUserRating;
+  } catch (err) {
+    console.log(
+      `WAR: 🍅 KETCHUP failed us 😭, assuming there is no rating, here is the reason: ${err}`
+    );
+    newTitle.tomatoUserRating = -1;
+  }
 
-      newTitle.save((sErr, title) => {
-        if (sErr) {
-          res.status(HttpStatus.NOT_FOUND).send(sErr);
-        } else {
-          //respond with JSON when asked (for API calls and integration testing), otherwise render HTML
-          if (req.get("Accept") === "application/json") {
-            res
-              .status(HttpStatus.CREATED)
-              .json({ message: "Title successfully added!", title });
-          } else {
-            req.flash(
-              "success",
-              "You've added '" + title.name + "'' to your watchlist!"
-            );
-            res.redirect("title");
-          }
-        }
-      });
-    });
+  try {
+    const title = await Title.create(newTitle);
+    if (req.get("Accept") === "application/json") {
+      res
+        .status(HttpStatus.CREATED)
+        .json({ message: "Title successfully added!", title });
+    } else {
+      req.flash(
+        "success",
+        "You've added '" + title.name + "'' to your watchlist!"
+      );
+      res.redirect("title");
+    }
+  } catch (sErr) {
+    res.status(HttpStatus.NOT_FOUND).send(sErr);
+  }
 }
 
 //READ GET /title to retrieve all titles
-function getTitles(req, res) {
+async function getTitles(req, res) {
   //metrics, but not during test
   if (process.env.NODE_ENV !== "test") {
     console.log("metrics.getTitles");
   }
-  var query = Title.find({ user: req.user.id }, undefined, {
-    sort: { createdAt: -1 }
-  });
-  query.exec((err, titles) => {
-    if (err) {
-      res.status(HttpStatus.NOT_FOUND).send(err);
+
+  try {
+    const titles = await Title.findAll({
+      where: { user: req.user.id },
+      order: [["createdAt", "DESC"]],
+    });
+
+    if (req.get("Accept") === "application/json") {
+      res.json(titles);
     } else {
-      //respond with JSON when asked (for API calls and integration testing), otherwise render HTML
-      if (req.get("Accept") === "application/json") {
-        res.json(titles);
-      } else {
-        res.render("title/index", {
-          titles: titles,
-          username: req.user.displayName
-        });
-      }
+      res.render("title/index", {
+        titles: titles,
+        username: req.user.displayName,
+      });
     }
-  });
+  } catch (err) {
+    res.status(HttpStatus.NOT_FOUND).send(err);
+  }
 }
 
 //READ GET /title/:id to retrieve a title
-function getTitle(req, res) {
+async function getTitle(req, res) {
   //metrics, but not during test
   if (process.env.NODE_ENV !== "test") {
     console.log("metrics.getTitle");
   }
-  var query = Title.findOne({ _id: req.params.id, user: req.user.id });
-  query.exec((err, title) => {
-    if (err || !title) {
-      res.status(HttpStatus.NOT_FOUND).send(err);
+
+  try {
+    const title = await Title.findOne({
+      where: { id: req.params.id, user: req.user.id },
+    });
+
+    if (!title) {
+      res.status(HttpStatus.NOT_FOUND).send("Title not found");
     } else {
-      //respond with JSON when asked (for API calls and integration testing), otherwise render HTML
       if (req.get("Accept") === "application/json") {
         res.json(title);
       } else {
         res.redirect("/title");
       }
     }
-  });
+  } catch (err) {
+    res.status(HttpStatus.NOT_FOUND).send(err);
+  }
 }
 
 //UPDATE PUT /title/:id to update a title
-function updateTitle(req, res) {
+async function updateTitle(req, res) {
   //metrics, but not during test
   if (process.env.NODE_ENV !== "test") {
     console.log("metrics.updateTitle");
   }
-  //check for name in body
+
   if (req.body.title.name !== "") {
-    var query = Title.findOneAndUpdate(
-      { _id: req.params.id, user: req.user.id },
-      { ...req.body.title, user: req.user.id },
-      { new: true }
-    );
-    query.exec((err, updatedTitle) => {
-      if (err || !updatedTitle) {
-        res.status(HttpStatus.NOT_FOUND).send(err);
+    try {
+      const [updated] = await Title.update(
+        { ...req.body.title, user: req.user.id },
+        { where: { id: req.params.id, user: req.user.id }, returning: true }
+      );
+
+      if (!updated) {
+        res.status(HttpStatus.NOT_FOUND).send("Title not found");
       } else {
-        //respond with JSON when asked (for API calls and integration testing), otherwise render HTML
+        const updatedTitle = await Title.findOne({
+          where: { id: req.params.id, user: req.user.id },
+        });
+
         if (req.get("Accept") === "application/json") {
           res.json({ message: "Title successfully updated!", updatedTitle });
         } else {
@@ -151,9 +150,10 @@ function updateTitle(req, res) {
           res.redirect("/title");
         }
       }
-    });
+    } catch (err) {
+      res.status(HttpStatus.NOT_FOUND).send(err);
+    }
   } else {
-    //respond with JSON when asked (for API calls and integration testing), otherwise render HTML
     if (req.get("Accept") === "application/json") {
       res
         .status(HttpStatus.BAD_REQUEST)
@@ -165,31 +165,33 @@ function updateTitle(req, res) {
 }
 
 //DELETE DELETE /title/:id to delete a title
-function deleteTitle(req, res) {
+async function deleteTitle(req, res) {
   //metrics, but not during test
   if (process.env.NODE_ENV !== "test") {
     console.log("metrics.deleteTitle");
   }
-  var query = Title.findOneAndRemove(
-    { _id: req.params.id, user: req.user.id },
-    req.body.title
-  );
-  query.exec((err, deletedTitle) => {
-    if (err || !deletedTitle) {
-      res.status(HttpStatus.NOT_FOUND).send(err);
+
+  try {
+    const deleted = await Title.destroy({
+      where: { id: req.params.id, user: req.user.id },
+    });
+
+    if (!deleted) {
+      res.status(HttpStatus.NOT_FOUND).send("Title not found");
     } else {
-      //respond with JSON when asked (for API calls and integration testing), otherwise render HTML
       if (req.get("Accept") === "application/json") {
-        res.json({ message: "Title successfully deleted!", deletedTitle });
+        res.json({ message: "Title successfully deleted!" });
       } else {
         req.flash(
           "success",
-          "You've deleted '" + deletedTitle.name + "'' from your watchlist!"
+          "You've deleted '" + req.body.title.name + "'' from your watchlist!"
         );
         res.redirect("/title");
       }
     }
-  });
+  } catch (err) {
+    res.status(HttpStatus.NOT_FOUND).send(err);
+  }
 }
 
 //export all functions

@@ -1,7 +1,8 @@
 {
-    "dbPort": "27017",
+    "dbProtocol": "postgresql",
+    "dbPort": "5432",
     "dbName": "uat",
-    "dbHost": "mongodb-moveez-uat",
+    "dbHost": "postgresql-moveez-uat",
     "dbUser": "uat",
     "dbPassword" : "uat"
 }

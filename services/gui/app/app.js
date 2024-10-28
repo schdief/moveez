@@ -1,19 +1,18 @@
-//DEPENDENCIES
 const session = require("./session");
 const login = require("./login");
 const connect = require("connect-ensure-login");
-var express = require("express"),
-  morgan = require("morgan"),
-  title = require("./controllers/title"),
-  landingPage = require("./controllers/landingPage"),
-  impressum = require("./controllers/impressum"),
-  bodyParser = require("body-parser"),
-  mongoose = require("mongoose"),
-  HttpStatus = require("http-status-codes"),
-  methodOverride = require("method-override"),
-  flash = require("connect-flash"),
-  cookieParser = require("cookie-parser"),
-  config = require("config"); //load database configuration from config file
+const express = require("express");
+const morgan = require("morgan");
+const title = require("./controllers/title");
+const landingPage = require("./controllers/landingPage");
+const impressum = require("./controllers/impressum");
+const bodyParser = require("body-parser");
+const { Pool } = require("pg");
+const HttpStatus = require("http-status-codes");
+const methodOverride = require("method-override");
+const flash = require("connect-flash");
+const cookieParser = require("cookie-parser");
+const config = require("config"); //load database configuration from config file
 
 //PARAMETERS
 const PORT = process.env.PORT || 80; //PORT is defined by environment variable or 80
@@ -21,7 +20,7 @@ const PORT = process.env.PORT || 80; //PORT is defined by environment variable o
 //DATABASE
 let dbUser;
 let dbPassword;
-var dbConnectionString =
+let dbConnectionString =
   config.dbProtocol +
   "://" +
   config.dbHost +
@@ -38,16 +37,16 @@ if (process.env.NODE_ENV === "prod") {
   dbUser = config.dbUser;
 }
 
-mongoose
-  .connect(dbConnectionString, {
-    auth: {
-      user: dbUser,
-      password: dbPassword
-    },
-    useNewUrlParser: true
-  })
+const pool = new Pool({
+  connectionString: dbConnectionString,
+  user: dbUser,
+  password: dbPassword,
+});
+
+pool
+  .connect()
   .then(() => console.log("connection to db successful"))
-  .catch(err => console.log(err));
+  .catch((err) => console.log(err));
 
 const createApp = () => {
   // create express application
@@ -92,7 +91,7 @@ const createApp = () => {
   //index
   app.get("/", landingPage.landingPage);
   //healtcheck
-  app.get("/health", function(req, res) {
+  app.get("/health", function (req, res) {
     res.status(HttpStatus.OK);
     res.send();
   });
@@ -114,5 +113,5 @@ const createApp = () => {
 
 //expose for integration testing with mocha
 module.exports = {
-  createApp
+  createApp,
 };
