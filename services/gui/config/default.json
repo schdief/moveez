@@ -1,8 +1,8 @@
 {
-    "dbProtocol": "mongodb",
-    "dbPort": "17092",
+    "dbProtocol": "postgresql",
+    "dbPort": "5432",
     "dbName": "title_dev",
-    "dbHost": "ds217092.mlab.com",
+    "dbHost": "localhost",
     "dbUser": "dev",
     "dbPassword" : "dev123"
 }

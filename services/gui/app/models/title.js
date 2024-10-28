@@ -1,20 +1,19 @@
-var mongoose = require("mongoose"),
-  Schema = mongoose.Schema;
+const { Sequelize, DataTypes } = require("sequelize");
+const sequelize = new Sequelize(process.env.DATABASE_URL);
 
-//schema definition for title
-var TitleSchema = new Schema({
-  name: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now },
-  seen: { type: Boolean, default: false },
-  seenOn: { type: Date },
-  poster: { type: String },
-  imdbRating: { type: Number },
-  imdbID: { type: String },
-  year: { type: String },
-  tomatoUserRating: { type: Number },
-  tomatoURL: { type: String },
-  user: { type: String },
-  genres: { type: Array }
+const Title = sequelize.define("Title", {
+  name: { type: DataTypes.STRING, allowNull: false },
+  createdAt: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
+  seen: { type: DataTypes.BOOLEAN, defaultValue: false },
+  seenOn: { type: DataTypes.DATE },
+  poster: { type: DataTypes.STRING },
+  imdbRating: { type: DataTypes.FLOAT },
+  imdbID: { type: DataTypes.STRING },
+  year: { type: DataTypes.STRING },
+  tomatoUserRating: { type: DataTypes.FLOAT },
+  tomatoURL: { type: DataTypes.STRING },
+  user: { type: DataTypes.STRING },
+  genres: { type: DataTypes.ARRAY(DataTypes.STRING) }
 });
 
-module.exports = mongoose.model("title", TitleSchema);
+module.exports = { Title };

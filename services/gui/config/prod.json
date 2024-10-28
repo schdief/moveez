@@ -1,6 +1,6 @@
 {
-    "dbProtocol": "mongodb",
-    "dbPort": "27017",
+    "dbProtocol": "postgresql",
+    "dbPort": "5432",
     "dbName": "prod",
-    "dbHost": "mongodb-moveez-prod"
+    "dbHost": "postgresql-moveez-prod"
 }
