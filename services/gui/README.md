@@ -23,3 +23,40 @@ Then either:
 - Paste it as services/gui/facebook/app_secret
 - Alternatively the facebook app secret can be provided as environment variable FACEBOOK_APP_SECRET
 - in production we need a secret called `moveez-prod-facebook` containing the base64 encoded app secret string as value `appsecret`
+
+# Dependencies and Build Instructions
+
+## Dependencies
+
+- Go 1.16 or later
+- Docker
+- Facebook App Secret
+
+## Build Instructions
+
+1. Clone the repository:
+```
+git clone https://github.com/schdief/moveez.git
+cd moveez
+```
+
+2. Build the Go application:
+```
+cd services/gui
+go build -o main .
+```
+
+3. Run the application:
+```
+./main
+```
+
+4. Build the Docker image:
+```
+docker build -t moveezgui .
+```
+
+5. Run the Docker container:
+```
+docker run -p 80:80 moveezgui
+```
