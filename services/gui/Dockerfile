@@ -1,4 +1,4 @@
-FROM node:alpine
+FROM golang:alpine
 LABEL maintainer="schdief.law@gmail.com"
 LABEL service="moveezgui"
 
@@ -9,15 +9,17 @@ ENV RELEASE ${RELEASE}
 # working directory for moveez
 WORKDIR /usr/src/app
 
-# install dependencies from package.json, but no dev
-COPY package*.json ./
-RUN npm install --only=prod --no-optional
+# install dependencies from go.mod
+COPY go.mod ./
+RUN go mod download
 
 # bundle app source
-# TODO: remove unncessary files like test directory
 COPY . .
+
+# build the Go application
+RUN go build -o main .
 
 EXPOSE 80
 
 # start moveez
-CMD [ "npm", "start" ]
+CMD ["./main"]
