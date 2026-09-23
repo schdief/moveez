@@ -1,114 +1,527 @@
 const STORAGE_KEY = "moveez-titles-v2";
 const SETTINGS_KEY = "moveez-settings-v2";
-const services = ["Disney+", "Amazon Prime", "Paramount+", "Netflix", "Apple TV+"];
-let titles = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-let settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+// Public key that the original Moveez GUI shipped with; users can set their own in Settings.
+const DEFAULT_OMDB_KEY = "b50af808";
+// Rotten Tomatoes has no official API. Its own website searches this public, search-only Algolia index,
+// which is the only browser-reachable source of the audience score.
+const RT_SEARCH = "https://79frdp12pn-dsn.algolia.net/1/indexes/content_rt/query?x-algolia-application-id=79FRDP12PN&x-algolia-api-key=175588f6e5f8319b27702e4cc4013561";
+const REFRESH_AFTER_MS = 12 * 60 * 60 * 1000;
+const SERVICES = ["Netflix", "Amazon Prime", "Disney+", "Apple TV+", "Paramount+"];
+const CINEMAS = ["Filmpalast Bautzen", "CinemaxX Dresden", "UCI Dresden"];
+const ASSETS = "services/gui/app/views/public/";
+const NO_COVER = `${ASSETS}nocover.png`;
+
+const $ = id => document.getElementById(id);
+const icon = name => `<svg class="icon"><use href="#i-${name}"/></svg>`;
+
+function load(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+}
+
+let titles = load(STORAGE_KEY, []);
+// Earlier versions stored the RT critics score (Tomatometer) as rtRating; Moveez uses the audience score.
+titles.forEach(title => { delete title.rtRating; });
+let settings = load(SETTINGS_KEY, {});
 let currentView = "watchlist";
 let selectedRating = 0;
-let selectedCatalogueTitle = null;
-const $ = id => document.getElementById(id);
+let ratingTargetId = null;
+let detail = null;
+let detailToken = 0;
+let lookupController = null;
+let lookupTimer = null;
+let statusTimer = null;
 
-function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(titles)); render(); }
-function esc(value = "") { return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])); }
-function poster(title) { return title.poster || "services/gui/app/views/public/nocover.png"; }
-function showStatus(message, kind = "") { $("status").textContent = message; $("status").className = `status ${kind}`; if (message) setTimeout(() => { $("status").textContent = ""; }, 5000); }
+function esc(value = "") {
+  return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
+}
+function newId() {
+  return crypto.randomUUID?.() ?? `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+}
+function persist() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(titles));
+  render();
+}
+function showStatus(message, kind = "") {
+  const el = $("status");
+  clearTimeout(statusTimer);
+  el.textContent = message;
+  el.className = `toast visible ${kind}`;
+  statusTimer = setTimeout(() => { el.className = "toast"; }, 4500);
+}
+
+const posterOf = url => (url && url !== "N/A" ? url : NO_COVER);
+const formatLabel = type => (type === "series" ? "TV series" : "Movie");
+const imdbUrl = title => (title.imdbID ? `https://www.imdb.com/title/${encodeURIComponent(title.imdbID)}/` : `https://www.imdb.com/find/?q=${encodeURIComponent(title.name)}`);
+const rtUrl = title => title.rtUrl || `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title.name)}`;
+const isOnList = imdbID => Boolean(imdbID) && titles.some(title => title.imdbID === imdbID);
+const today = () => new Date().toLocaleDateString("sv-SE");
+function formatDate(value) {
+  const date = new Date(value.length === 10 ? `${value}T00:00` : value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+/* ---------- OMDb ---------- */
+
+async function omdb(params, signal) {
+  const url = new URL("https://www.omdbapi.com/");
+  url.search = new URLSearchParams({ apikey: settings.omdbKey || DEFAULT_OMDB_KEY, ...params });
+  const response = await fetch(url, { signal });
+  const data = await response.json().catch(() => ({}));
+  if (data.Response === "True") return data;
+  throw new Error(data.Error || `OMDb responded with ${response.status}`);
+}
+
+function describeLookupError(error, query) {
+  if (/not found/i.test(error.message)) return `No movies or series found for “${query}”.`;
+  if (/too many/i.test(error.message)) return "Too many matches – keep typing.";
+  if (/api key|limit/i.test(error.message)) return `OMDb says: ${error.message} You can set your own key in Settings.`;
+  return "OMDb could not be reached. Check your connection and try again.";
+}
+
+function toTitle(data) {
+  const clean = value => (value && value !== "N/A" ? value : "");
+  return {
+    imdbID: data.imdbID,
+    name: data.Title,
+    year: clean(data.Year),
+    type: data.Type === "series" ? "series" : "movie",
+    runtime: clean(data.Runtime),
+    imdbRating: clean(data.imdbRating),
+    genres: clean(data.Genre).split(",").map(genre => genre.trim()).filter(Boolean),
+    plot: clean(data.Plot),
+    poster: clean(data.Poster)
+  };
+}
+
+/* ---------- Rotten Tomatoes audience score ---------- */
+
+const normalize = value => String(value || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, "and").replace(/[^a-z0-9]+/g, " ").trim();
+
+// Resolves to { rtAudience, rtUrl } (empty strings if RT has no matching title); rejects on network errors.
+async function fetchRtAudience(title) {
+  const params = new URLSearchParams({ query: title.name, hitsPerPage: "10", attributesToRetrieve: JSON.stringify(["title", "titles", "type", "releaseYear", "vanity", "rottenTomatoes"]) });
+  // form-urlencoded keeps this a CORS "simple" request (no preflight); Algolia still parses the JSON body.
+  const response = await fetch(RT_SEARCH, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: JSON.stringify({ params: params.toString() }) });
+  if (!response.ok) throw new Error(`Rotten Tomatoes responded with ${response.status}`);
+  const { hits = [] } = await response.json();
+  const type = title.type === "series" ? "tv" : "movie";
+  const year = parseInt(title.year, 10);
+  const name = normalize(title.name);
+  const candidates = hits.filter(hit => hit.type === type && (!year || !hit.releaseYear || Math.abs(hit.releaseYear - year) <= 1));
+  const hit = candidates.find(item => [item.title, ...(item.titles || [])].some(value => normalize(value) === name));
+  if (!hit) return { rtAudience: "", rtUrl: "" };
+  const score = hit.rottenTomatoes?.audienceScore;
+  return {
+    rtAudience: Number.isFinite(score) ? String(score) : "",
+    rtUrl: hit.vanity ? `https://www.rottentomatoes.com/${type === "tv" ? "tv" : "m"}/${encodeURIComponent(hit.vanity)}` : ""
+  };
+}
+
+// IMDb (0–10) × RT audience (0–100 %) → 0–10, so 10 is a perfect score.
+function moveezScore(title) {
+  const imdb = parseFloat(title.imdbRating);
+  const audience = parseFloat(title.rtAudience);
+  return Number.isFinite(imdb) && Number.isFinite(audience) ? (Math.round(imdb * audience / 10) / 10).toFixed(1) : "";
+}
+
+/* ---------- Background rating refresh ---------- */
+
+async function fetchRatings(title) {
+  const year = parseInt(title.year, 10);
+  const data = title.imdbID
+    ? await omdb({ i: title.imdbID })
+    : await omdb({ t: title.name, type: title.type, ...(year ? { y: String(year) } : {}) });
+  const fresh = toTitle(data);
+  const update = { imdbID: fresh.imdbID, imdbRating: fresh.imdbRating, ratingsUpdatedAt: new Date().toISOString() };
+  try { Object.assign(update, await fetchRtAudience(fresh)); } catch { /* keep the last known RT values */ }
+  return update;
+}
+
+// Runs after the first render: the list is usable immediately and cards update as fresh ratings arrive.
+async function refreshRatings() {
+  const isStale = title => !(Date.now() - Date.parse(title.ratingsUpdatedAt) < REFRESH_AFTER_MS);
+  // Watchlist titles are kept fresh; binged titles are only backfilled once if they never had a refresh.
+  const due = titles.filter(title => (title.seen ? !title.ratingsUpdatedAt : isStale(title)));
+  const BATCH = 4;
+  for (let index = 0; index < due.length; index += BATCH) {
+    const results = await Promise.allSettled(due.slice(index, index + BATCH).map(async title => [title.id, await fetchRatings(title)]));
+    let changed = false;
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      const [id, update] = result.value;
+      const title = titles.find(item => item.id === id);
+      if (title) { Object.assign(title, update); changed = true; }
+    }
+    if (changed) persist();
+  }
+}
+
+/* ---------- Rendering ---------- */
+
+function ratingsHtml(title) {
+  const score = moveezScore(title);
+  const moveez = score
+    ? `<span class="rating score" title="Moveez score: IMDb × Rotten Tomatoes audience score"><img src="icons/icon.svg" alt="">${score}</span>`
+    : "";
+  const imdb = title.imdbRating
+    ? `<a class="rating" href="${esc(imdbUrl(title))}" target="_blank" rel="noopener" title="Open on IMDb"><span class="imdb-logo">IMDb</span><span>${esc(title.imdbRating)}</span></a>`
+    : "";
+  const rt = title.rtAudience
+    ? `<a class="rating" href="${esc(rtUrl(title))}" target="_blank" rel="noopener" title="Rotten Tomatoes audience score – open on Rotten Tomatoes"><img class="rt-logo" src="${ASSETS}rottentomato.png" alt="Rotten Tomatoes audience"><span>${esc(title.rtAudience)}%</span></a>`
+    : "";
+  return moveez || imdb || rt ? `<div class="ratings">${moveez}${imdb}${rt}</div>` : "";
+}
+
+function card(title) {
+  const genres = title.genres.map(genre => `<span class="chip">${esc(genre)}</span>`).join("");
+  const services = title.services.map(service => `<span class="chip outline">${esc(service)}</span>`).join("");
+  const cinema = !title.seen && title.cinemaNow ? `<div class="note">Now in cinema · ${esc(title.cinema)}</div>` : "";
+  const watched = title.seen
+    ? `<div class="note">Watched ${esc(formatDate(title.seenOn || ""))}${title.userRating ? ` · <span class="popcorn" aria-label="${title.userRating} of 5">${"🍿".repeat(title.userRating)}</span>` : ""}</div>`
+    : "";
+  const primary = title.seen
+    ? `<button class="button soft small" data-unwatch="${esc(title.id)}">${icon("undo")}Watch again</button>`
+    : `<button class="button primary small" data-watch="${esc(title.id)}">${icon("check")}Mark watched</button>`;
+  return `<article class="card">
+    <img class="poster" src="${esc(posterOf(title.poster))}" alt="" loading="lazy" data-fallback>
+    <div class="card-body">
+      <p class="meta">${formatLabel(title.type)}${title.year ? ` · ${esc(title.year)}` : ""}</p>
+      <h2>${esc(title.name)}</h2>
+      ${ratingsHtml(title)}
+      ${genres ? `<div class="chips">${genres}</div>` : ""}
+      ${services ? `<div class="chips">${services}</div>` : ""}
+      ${cinema}${watched}
+      <div class="card-actions">${primary}<button class="icon-button" data-remove="${esc(title.id)}" aria-label="Remove ${esc(title.name)}" title="Remove">${icon("trash")}</button></div>
+    </div>
+  </article>`;
+}
+
+function emptyState(filtered) {
+  if (filtered) return `<div class="empty"><h2>No matches</h2><p>Nothing on this list fits your search or filters.</p></div>`;
+  if (currentView === "binged") return `<div class="empty"><img src="${ASSETS}logo.png" alt=""><h2>Nothing binged yet</h2><p>Mark a title as watched and give it your popcorn rating.</p></div>`;
+  return `<div class="empty"><img src="${ASSETS}logo.png" alt=""><h2>Your watchlist is empty</h2><p>Search IMDb for the movies and series you want to watch next.</p><button class="button primary" data-action="add">${icon("plus")}Add title</button></div>`;
+}
 
 function render() {
-  const query = $("searchInput").value.toLowerCase();
+  const query = $("searchInput").value.trim().toLowerCase();
   const type = $("typeFilter").value;
-  const genre = $("genreFilter").value;
   const service = $("serviceFilter").value;
-  const visible = titles.filter(title => (currentView === "binged" ? title.seen : !title.seen))
+  const genres = [...new Set(titles.flatMap(title => title.genres))].sort();
+  const genre = genres.includes($("genreFilter").value) ? $("genreFilter").value : "all";
+  $("genreFilter").innerHTML = `<option value="all">All genres</option>${genres.map(item => `<option>${esc(item)}</option>`).join("")}`;
+  $("genreFilter").value = genre;
+
+  const inView = titles.filter(title => (currentView === "binged" ? title.seen : !title.seen));
+  const visible = inView
     .filter(title => !query || title.name.toLowerCase().includes(query))
     .filter(title => type === "all" || title.type === type)
     .filter(title => genre === "all" || title.genres.includes(genre))
     .filter(title => service === "all" || title.services.includes(service));
+  if (currentView === "binged") visible.sort((a, b) => String(b.seenOn || "").localeCompare(String(a.seenOn || "")));
+
   $("watchCount").textContent = titles.filter(title => !title.seen).length;
   $("bingeCount").textContent = titles.filter(title => title.seen).length;
-  const genres = [...new Set(titles.flatMap(title => title.genres))].sort();
-  const previousGenre = genre;
-  $("genreFilter").innerHTML = `<option value="all">All genres</option>${genres.map(item => `<option value="${esc(item)}">${esc(item)}</option>`).join("")}`;
-  $("genreFilter").value = genres.includes(previousGenre) ? previousGenre : "all";
-  $("titleGrid").innerHTML = visible.length ? visible.map(card).join("") : `<div class="empty"><span>${currentView === "binged" ? "🍿" : "✦"}</span><h2>${currentView === "binged" ? "Your binge history is empty" : "Your next favourite is waiting"}</h2><p>${currentView === "binged" ? "Mark a title as watched and give it your popcorn rating." : "Add a title above or ask Moveez to surprise you."}</p></div>`;
+  $("viewTitle").textContent = currentView === "binged" ? "Binged" : "Watchlist";
+  $("surpriseButton").hidden = currentView === "binged";
+  document.querySelectorAll(".tab").forEach(tab => {
+    const active = tab.dataset.view === currentView;
+    tab.classList.toggle("active", active);
+    if (active) tab.setAttribute("aria-current", "page"); else tab.removeAttribute("aria-current");
+  });
+  $("titleGrid").innerHTML = visible.length ? visible.map(card).join("") : emptyState(inView.length > 0);
 }
 
-function card(title) {
-  const rating = title.imdbRating ? `<span class="imdb">★ ${esc(title.imdbRating)}</span>` : "";
-  const rt = title.rtRating ? `<span class="rt">🍅 ${esc(title.rtRating)}%</span>` : "";
-  const serviceChips = title.services.map(service => `<span class="chip">${esc(service)}</span>`).join("");
-  const genres = title.genres.map(item => `<span class="genre-chip">${esc(item)}</span>`).join("");
-  const cinema = title.cinemaNow ? `<span class="cinema">● In ${esc(title.cinema)}</span>` : "";
-  const popcorn = title.userRating ? `<span class="user-rating">${"🍿".repeat(title.userRating)}</span>` : "";
-  return `<article class="title-card"><img class="poster" src="${esc(poster(title))}" alt="" loading="lazy" onerror="this.src='services/gui/app/views/public/nocover.png'"><div class="card-content"><div class="card-top"><span class="format">${title.type === "series" ? "TV SERIES" : "MOVIE"} · ${esc(title.year || "—")}</span><button class="remove" data-remove="${title.id}" aria-label="Remove ${esc(title.name)}">×</button></div><h2>${esc(title.name)}</h2><div class="badges">${rating}${rt}</div><div class="genres">${genres}</div>${serviceChips ? `<div class="services">${serviceChips}</div>` : ""}${cinema ? `<div class="cinema-line">${cinema}</div>` : ""}${popcorn ? `<div class="watched-line">Your rating ${popcorn}</div>` : ""}<div class="card-actions">${title.seen ? `<button class="secondary-button" data-unwatch="${title.id}">↶ Watch again</button>` : `<button class="primary-button small" data-watch="${title.id}">✓ Mark watched</button>`}<button class="text-button" data-remove="${title.id}">Remove</button></div></div></article>`;
+/* ---------- Add title dialog ---------- */
+
+function setLookupMessage(message, kind = "") {
+  $("lookupMessage").textContent = message;
+  $("lookupMessage").className = `hint ${kind}`;
 }
 
-function openDialog(dialog) { dialog.showModal(); }
-function clearForm() { ["titleName", "titleYear", "imdbRating", "rtRating", "titleGenres", "posterUrl"].forEach(id => $(id).value = ""); $("titleType").value = "movie"; $("cinemaNow").checked = false; $("lookupResults").innerHTML = ""; document.querySelectorAll('input[name="service"]').forEach(input => { input.checked = false; }); }
-function fillTitle(data) {
-  $("titleName").value = data.Title || ""; $("titleYear").value = (data.Year || "").slice(0, 4); $("titleType").value = data.Type === "series" ? "series" : "movie"; $("imdbRating").value = data.imdbRating || ""; $("rtRating").value = data.tomatoUserRating || ""; $("titleGenres").value = data.Genre || ""; $("posterUrl").value = data.Poster && data.Poster !== "N/A" ? data.Poster : "";
+function showLookupPane() {
+  detailToken++;
+  detail = null;
+  $("lookupPane").hidden = false;
+  $("detailPane").hidden = true;
+  $("detailFoot").hidden = true;
+  $("lookupBack").hidden = true;
+  $("titleDialogHeading").textContent = "Add title";
+}
+
+function openAddDialog() {
+  showLookupPane();
+  lookupController?.abort();
+  $("lookupInput").value = "";
+  $("lookupResults").innerHTML = "";
+  setLookupMessage("Search IMDb for a movie or series to add.");
+  $("titleDialog").showModal();
+  $("lookupInput").focus();
+}
+
+function resultRow(item) {
+  const trailing = isOnList(item.imdbID) ? `<span class="pill">On your list</span>` : icon("next");
+  return `<li><button type="button" class="lookup-result" data-imdb="${esc(item.imdbID)}">
+    <img src="${esc(posterOf(item.Poster))}" alt="" loading="lazy" data-fallback>
+    <span class="result-text"><strong>${esc(item.Title)}</strong><small>${esc(item.Year)} · ${formatLabel(item.Type)}</small></span>
+    ${trailing}
+  </button></li>`;
 }
 
 async function lookup(query) {
-  if (!settings.omdbKey || query.length < 3) return;
+  lookupController?.abort();
+  if (query.length < 3) {
+    $("lookupResults").innerHTML = "";
+    setLookupMessage(query ? "Keep typing…" : "Search IMDb for a movie or series to add.");
+    return;
+  }
+  lookupController = new AbortController();
+  setLookupMessage("Searching…");
   try {
-    const response = await fetch(`https://www.omdbapi.com/?apikey=${encodeURIComponent(settings.omdbKey)}&s=${encodeURIComponent(query)}`);
-    const data = await response.json();
-    $("lookupResults").innerHTML = data.Response === "True" ? data.Search.slice(0, 5).map(item => `<button type="button" class="lookup-result" data-imdb="${esc(item.imdbID)}"><img src="${esc(item.Poster === "N/A" ? poster({}) : item.Poster)}" alt=""><span><strong>${esc(item.Title)}</strong><small>${esc(item.Year)} · ${esc(item.Type)}</small></span><b>＋</b></button>`).join("") : `<p class="muted">No matches found.</p>`;
-  } catch (error) { showStatus("Could not reach OMDb. You can still enter the title manually.", "error"); }
+    const data = await omdb({ s: query }, lookupController.signal);
+    const seen = new Set();
+    const results = data.Search.filter(item => (item.Type === "movie" || item.Type === "series") && !seen.has(item.imdbID) && seen.add(item.imdbID));
+    $("lookupResults").innerHTML = results.map(resultRow).join("");
+    setLookupMessage(results.length ? "" : `No movies or series found for “${query}”.`);
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    $("lookupResults").innerHTML = "";
+    setLookupMessage(describeLookupError(error, query), "error");
+  }
 }
 
-async function loadLookup(id) {
-  try {
-    const response = await fetch(`https://www.omdbapi.com/?apikey=${encodeURIComponent(settings.omdbKey)}&i=${encodeURIComponent(id)}&plot=short`);
-    selectedCatalogueTitle = await response.json();
-    fillTitle(selectedCatalogueTitle);
-    $("catalogueSaveButton").disabled = selectedCatalogueTitle.Response === "False";
-    $("lookupResults").querySelectorAll(".lookup-result").forEach(result => result.classList.toggle("selected", result.dataset.imdb === id));
-  } catch (error) { showStatus("The title details could not be loaded.", "error"); }
+function detailHtml(title) {
+  const onList = isOnList(title.imdbID);
+  const meta = [formatLabel(title.type), title.year, title.runtime].filter(Boolean).map(esc).join(" · ");
+  const services = SERVICES.map(service => `<label><input type="checkbox" name="service" value="${esc(service)}"><span>${esc(service)}</span></label>`).join("");
+  const cinemas = CINEMAS.map(cinema => `<option>${esc(cinema)}</option>`).join("");
+  return `<div class="detail">
+      <img src="${esc(posterOf(title.poster))}" alt="" data-fallback>
+      <div>
+        <p class="meta">${meta}</p>
+        <h3>${esc(title.name)}</h3>
+        ${ratingsHtml(title)}
+        ${title.genres.length ? `<div class="chips">${title.genres.map(genre => `<span class="chip">${esc(genre)}</span>`).join("")}</div>` : ""}
+      </div>
+    </div>
+    ${title.plot ? `<p class="plot">${esc(title.plot)}</p>` : ""}
+    <div class="links">
+      <a class="button ghost small" href="${esc(imdbUrl(title))}" target="_blank" rel="noopener">IMDb ${icon("external")}</a>
+      <a class="button ghost small" href="${esc(rtUrl(title))}" target="_blank" rel="noopener">Rotten Tomatoes ${icon("external")}</a>
+    </div>
+    ${onList ? "" : `<div class="detail-options">
+      <h4>Streaming on</h4>
+      <div class="toggle-chips">${services}</div>
+      <h4>Cinema</h4>
+      <div class="cinema-row"><label><input type="checkbox" id="cinemaNow"> Currently showing at</label><select id="cinema" aria-label="Cinema">${cinemas}</select></div>
+    </div>`}`;
 }
+
+async function openDetail(imdbID) {
+  const token = ++detailToken;
+  detail = null;
+  $("lookupPane").hidden = true;
+  $("detailPane").hidden = false;
+  $("detailFoot").hidden = true;
+  $("lookupBack").hidden = false;
+  $("titleDialogHeading").textContent = "Details";
+  $("detailPane").innerHTML = `<p class="hint">Loading…</p>`;
+  try {
+    const data = await omdb({ i: imdbID, plot: "short" });
+    if (token !== detailToken) return;
+    const base = toTitle(data);
+    const rt = await fetchRtAudience(base).catch(() => ({ rtAudience: "", rtUrl: "" }));
+    if (token !== detailToken) return;
+    detail = { ...base, ...rt, ratingsUpdatedAt: new Date().toISOString() };
+    const onList = isOnList(detail.imdbID);
+    $("titleDialogHeading").textContent = detail.name;
+    $("detailPane").innerHTML = detailHtml(detail);
+    $("confirmAdd").disabled = onList;
+    $("confirmAdd").textContent = onList ? "Already on your list" : "Add to watchlist";
+    $("detailFoot").hidden = false;
+  } catch (error) {
+    if (token !== detailToken) return;
+    $("detailPane").innerHTML = `<p class="hint error">The details could not be loaded. ${esc(error.message)}</p>`;
+  }
+}
+
+function addDetail() {
+  if (!detail || isOnList(detail.imdbID)) return;
+  const entry = {
+    id: newId(),
+    ...detail,
+    services: [...$("detailPane").querySelectorAll('input[name="service"]:checked')].map(input => input.value),
+    cinemaNow: $("cinemaNow").checked,
+    cinema: $("cinema").value,
+    seen: false,
+    createdAt: new Date().toISOString()
+  };
+  titles.unshift(entry);
+  if (currentView !== "watchlist") currentView = "watchlist";
+  persist();
+  $("titleDialog").close();
+  showStatus(`“${entry.name}” added to your watchlist.`);
+}
+
+/* ---------- Surprise me ---------- */
 
 async function surpriseMe() {
-  if (!titles.length) { openDialog($("titleDialog")); showStatus("Add a few titles first, then I can find your vibe."); return; }
-  $("surpriseButton").disabled = true; showStatus("Finding a good match…");
-  let suggestion = null;
-  if (settings.llmEndpoint && settings.llmKey) {
-    try {
-      const response = await fetch(settings.llmEndpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${settings.llmKey}` }, body: JSON.stringify({ model: settings.llmModel || "gpt-4o-mini", messages: [{ role: "system", content: "You recommend movies or TV series. Return only a title and one short reason separated by a pipe." }, { role: "user", content: `My watchlist: ${titles.map(title => `${title.name} (${title.genres.join(", ")})`).join("; ")}` }], temperature: 0.8 }) });
-      const data = await response.json(); const text = data.choices?.[0]?.message?.content || ""; const [name, reason] = text.split("|"); if (name) suggestion = { name: name.trim(), reason: (reason || "A fresh match for your watchlist.").trim() };
-    } catch (error) { showStatus("The LLM is unavailable, so I picked a local match instead.", "error"); }
+  const unseen = titles.filter(title => !title.seen);
+  const hasLlm = Boolean(settings.llmEndpoint && settings.llmKey);
+  if (!unseen.length && !hasLlm) {
+    showStatus("Add a few titles first, then I can pick one for you.");
+    return;
   }
-  const fallback = titles.filter(title => !title.seen)[Math.floor(Math.random() * Math.max(1, titles.filter(title => !title.seen).length))] || titles[Math.floor(Math.random() * titles.length)];
-  $("surpriseButton").disabled = false;
-  if (suggestion) showStatus(`Try “${suggestion.name}” — ${suggestion.reason}`, "success");
-  else showStatus(`Tonight’s pick: “${fallback.name}” — it’s already on your list.`, "success");
+  const button = $("surpriseButton");
+  button.disabled = true;
+  try {
+    if (hasLlm) {
+      try {
+        const response = await fetch(settings.llmEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${settings.llmKey}` },
+          body: JSON.stringify({
+            model: settings.llmModel || "gpt-4o-mini",
+            temperature: 0.8,
+            messages: [
+              { role: "system", content: "You recommend one movie or TV series the user has not listed. Reply only with the title and one short reason separated by a pipe character." },
+              { role: "user", content: `My list: ${titles.map(title => `${title.name} (${title.genres.join(", ")})`).join("; ") || "empty"}` }
+            ]
+          })
+        });
+        if (!response.ok) throw new Error(`LLM responded with ${response.status}`);
+        const data = await response.json();
+        const [name, reason] = (data.choices?.[0]?.message?.content || "").split("|");
+        if (name?.trim()) {
+          showStatus(`Try “${name.trim()}” – ${(reason || "a fresh match for your list.").trim()}`);
+          return;
+        }
+      } catch {
+        if (!unseen.length) { showStatus("The LLM is unavailable right now.", "error"); return; }
+      }
+    }
+    const pick = unseen[Math.floor(Math.random() * unseen.length)];
+    showStatus(`Tonight’s pick: “${pick.name}”`);
+  } finally {
+    button.disabled = false;
+  }
 }
 
-function addTitle(event) {
+/* ---------- Rating ---------- */
+
+function renderPopcorn() {
+  $("popcornRating").innerHTML = [1, 2, 3, 4, 5]
+    .map(value => `<button type="button" role="radio" aria-checked="${value === selectedRating}" class="${value <= selectedRating ? "selected" : ""}" data-rating="${value}" aria-label="${value} popcorn bag${value > 1 ? "s" : ""}">🍿</button>`)
+    .join("");
+}
+
+function openRating(id) {
+  const title = titles.find(item => item.id === id);
+  if (!title) return;
+  ratingTargetId = id;
+  selectedRating = 0;
+  $("ratingTitle").textContent = title.name;
+  $("watchedDate").value = today();
+  renderPopcorn();
+  $("ratingDialog").showModal();
+}
+
+/* ---------- Events ---------- */
+
+document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
+  currentView = tab.dataset.view;
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}));
+$("searchInput").addEventListener("input", render);
+["typeFilter", "genreFilter", "serviceFilter"].forEach(id => $(id).addEventListener("change", render));
+$("serviceFilter").insertAdjacentHTML("beforeend", SERVICES.map(service => `<option>${esc(service)}</option>`).join(""));
+
+$("addButton").addEventListener("click", openAddDialog);
+$("surpriseButton").addEventListener("click", surpriseMe);
+
+$("titleGrid").addEventListener("click", event => {
+  const target = event.target.closest("button");
+  if (!target) return;
+  if (target.dataset.action === "add") openAddDialog();
+  if (target.dataset.watch) openRating(target.dataset.watch);
+  if (target.dataset.unwatch) {
+    const title = titles.find(item => item.id === target.dataset.unwatch);
+    if (!title) return;
+    Object.assign(title, { seen: false, userRating: 0, seenOn: undefined });
+    persist();
+    showStatus(`“${title.name}” is back on your watchlist.`);
+  }
+  if (target.dataset.remove) {
+    const title = titles.find(item => item.id === target.dataset.remove);
+    if (title && confirm(`Remove “${title.name}”?`)) {
+      titles = titles.filter(item => item !== title);
+      persist();
+    }
+  }
+});
+
+// Posters from OMDb/IMDb sometimes 404; swap in the placeholder once.
+document.addEventListener("error", event => {
+  const img = event.target;
+  if (img.tagName === "IMG" && img.hasAttribute("data-fallback") && !img.src.endsWith(NO_COVER)) img.src = NO_COVER;
+}, true);
+
+$("lookupInput").addEventListener("input", event => {
+  clearTimeout(lookupTimer);
+  lookupTimer = setTimeout(() => lookup(event.target.value.trim()), 300);
+});
+$("lookupResults").addEventListener("click", event => {
+  const result = event.target.closest("[data-imdb]");
+  if (result) openDetail(result.dataset.imdb);
+});
+$("lookupBack").addEventListener("click", () => { showLookupPane(); $("lookupInput").focus(); });
+$("confirmAdd").addEventListener("click", addDetail);
+
+$("settingsButton").addEventListener("click", () => {
+  ["omdbKey", "llmEndpoint", "llmKey", "llmModel"].forEach(id => { $(id).value = settings[id] || ""; });
+  $("settingsDialog").showModal();
+});
+$("settingsForm").addEventListener("submit", event => {
   event.preventDefault();
-  const name = $("titleName").value.trim(); if (!name) return;
-  const entry = { id: crypto.randomUUID(), name, year: $("titleYear").value.trim(), type: $("titleType").value, imdbRating: $("imdbRating").value, rtRating: $("rtRating").value, genres: $("titleGenres").value.split(",").map(item => item.trim()).filter(Boolean), services: [...document.querySelectorAll('input[name="service"]:checked')].map(input => input.value), cinemaNow: $("cinemaNow").checked, cinema: $("cinema").value, poster: $("posterUrl").value.trim(), seen: false, createdAt: new Date().toISOString() };
-  titles.unshift(entry); save(); $("titleDialog").close(); clearForm(); showStatus(`“${name}” added to your watchlist.`, "success");
-}
+  ["omdbKey", "llmEndpoint", "llmKey", "llmModel"].forEach(id => { settings[id] = $(id).value.trim(); });
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  $("settingsDialog").close();
+  showStatus("Settings saved on this device.");
+});
+$("clearData").addEventListener("click", () => {
+  if (!confirm("Delete all titles and settings stored on this device?")) return;
+  titles = [];
+  settings = {};
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(SETTINGS_KEY);
+  $("settingsDialog").close();
+  render();
+  showStatus("Local data cleared.");
+});
 
-function addSelectedCatalogueTitle() {
-  if (!selectedCatalogueTitle || selectedCatalogueTitle.Response === "False") return;
-  addTitle({ preventDefault() {} });
-}
+$("popcornRating").addEventListener("click", event => {
+  const button = event.target.closest("[data-rating]");
+  if (!button) return;
+  const value = Number(button.dataset.rating);
+  selectedRating = value === selectedRating ? 0 : value;
+  renderPopcorn();
+});
+$("ratingForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const title = titles.find(item => item.id === ratingTargetId);
+  if (!title) return;
+  Object.assign(title, { seen: true, seenOn: $("watchedDate").value || today(), userRating: selectedRating });
+  persist();
+  $("ratingDialog").close();
+  showStatus(`“${title.name}” moved to your binge history.`);
+});
 
-function markWatched(id) { const title = titles.find(item => item.id === id); if (!title) return; $("ratingTitle").textContent = title.name; $("watchedDate").value = new Date().toISOString().slice(0, 10); selectedRating = 0; renderPopcorn(); $("ratingDialog").dataset.id = id; openDialog($("ratingDialog")); }
-function renderPopcorn() { $("popcornRating").innerHTML = [1, 2, 3, 4, 5].map(value => `<button type="button" class="${value <= selectedRating ? "selected" : ""}" data-rating="${value}" aria-label="${value} popcorn bags">🍿</button>`).join(""); }
-function saveRating(event) { event.preventDefault(); const title = titles.find(item => item.id === $("ratingDialog").dataset.id); if (!title) return; title.seen = true; title.seenOn = $("watchedDate").value || new Date().toISOString(); title.userRating = selectedRating; save(); $("ratingDialog").close(); showStatus("Added to your binge history.", "success"); }
+document.querySelectorAll("dialog").forEach(dialog => {
+  dialog.querySelectorAll("[data-close]").forEach(button => button.addEventListener("click", () => dialog.close()));
+  // Clicks on the dialog element itself (not its content) come from the backdrop.
+  dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
+});
 
-document.querySelectorAll(".bottom-tab").forEach(tab => tab.addEventListener("click", () => { currentView = tab.dataset.view; document.querySelectorAll(".bottom-tab").forEach(item => item.classList.toggle("active", item === tab)); render(); window.scrollTo({ top: 0, behavior: "smooth" }); }));
-["searchInput", "typeFilter", "genreFilter", "serviceFilter"].forEach(id => $(id).addEventListener(id === "searchInput" ? "input" : "change", render));
-$("addButton").addEventListener("click", () => { clearForm(); selectedCatalogueTitle = null; $("catalogueSaveButton").disabled = true; if (!settings.omdbKey) showStatus("Add an OMDb key in Settings to browse the catalogue.", "error"); openDialog($("titleDialog")); });
-$("titleForm").addEventListener("submit", addTitle); $("surpriseButton").addEventListener("click", surpriseMe);
-$("catalogueSaveButton").addEventListener("click", addSelectedCatalogueTitle);
-$("settingsButton").addEventListener("click", () => { ["omdbKey", "llmEndpoint", "llmKey", "llmModel"].forEach(id => $(id).value = settings[id] || ""); openDialog($("settingsDialog")); });
-$("settingsForm").addEventListener("submit", event => { event.preventDefault(); ["omdbKey", "llmEndpoint", "llmKey", "llmModel"].forEach(id => settings[id] = $(id).value.trim()); localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); $("settingsDialog").close(); showStatus("Settings saved on this device.", "success"); });
-$("saveRatingButton").addEventListener("click", () => saveRating({ preventDefault() {} }));
-$("clearData").addEventListener("click", () => { if (confirm("Delete all titles and local settings?")) { titles = []; settings = {}; localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(SETTINGS_KEY); $("settingsDialog").close(); render(); showStatus("Local data cleared.", "success"); } });
-$("lookupInput").addEventListener("input", event => { clearTimeout(window.lookupTimer); window.lookupTimer = setTimeout(() => lookup(event.target.value.trim()), 350); });
-document.addEventListener("click", event => { const result = event.target.closest("[data-imdb]"); if (result) loadLookup(result.dataset.imdb); const watch = event.target.closest("[data-watch]"); if (watch) markWatched(watch.dataset.watch); const unwatch = event.target.closest("[data-unwatch]"); if (unwatch) { const title = titles.find(item => item.id === unwatch.dataset.unwatch); title.seen = false; title.userRating = 0; save(); } const remove = event.target.closest("[data-remove]"); if (remove && confirm("Remove this title?")) { titles = titles.filter(item => item.id !== remove.dataset.remove); save(); } const rating = event.target.closest("[data-rating]"); if (rating) { selectedRating = Number(rating.dataset.rating); renderPopcorn(); } });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 render();
+refreshRatings();

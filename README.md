@@ -14,9 +14,9 @@ The repository root now contains the GitHub Pages version of Moveez. It is a mob
 
 1. **Single app shell:** two focused pages (Watchlist and Binged) reached through a fixed iPhone-style bottom navigation, responsive cards, search, format/genre/service filters, and a catalogue picker.
 2. **Local-first data:** titles, cinema selection, services, watched dates, and popcorn ratings are stored in browser `localStorage`, so the app works without a server and can be installed on iOS.
-3. **Catalogue import:** use Browse catalogue to search a title provider and import the selected title automatically; no manual title form is required. The current browser-safe implementation uses OMDb search/detail responses, including IMDb ratings and any Rotten Tomatoes viewer score that the response exposes.
+3. **Catalogue import:** use Add title to search OMDb (IMDb data), open a result to see poster, plot, IMDb rating, the Rotten Tomatoes audience score and the **moveez score** (IMDb × RT audience %, so 10 is perfect), jump to the IMDb/Rotten Tomatoes pages, pick streaming services/cinema, and add it. On start-up the app refreshes the ratings of watchlist titles in the background (at most every 12 hours per title). The original Moveez OMDb key is built in; a personal key can be set in Settings. RT has no official API, so the audience score comes from the public search index the RT website itself uses and may break if RT changes it.
 4. **Personal discovery:** “Surprise me” uses an optional OpenAI-compatible LLM endpoint configured in Settings; without one it chooses an unseen title already on the list.
-5. **Pages delivery:** `.github/workflows/pages.yml` publishes the repository root and `sw.js` caches the app shell for offline use.
+5. **Pages delivery:** `.github/workflows/pages.yml` publishes the repository root and `sw.js` serves the app shell network-first with an offline fallback (API calls are never cached).
 
 Rotten Tomatoes does not provide a supported public browser catalogue API, so the PWA does not scrape RT pages or claim live RT coverage. A future backend/provider integration can replace the catalogue adapter with licensed RT data. Cinema schedules and streaming availability are represented as user-selectable fields for now; live availability requires provider-specific APIs, location permissions, and an intermediary backend.
 

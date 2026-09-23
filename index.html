@@ -5,99 +5,146 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#008080">
     <meta name="description" content="Moveez - your personal movie and TV watchlist">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.webmanifest">
-    <link rel="icon" href="services/gui/app/views/public/logo.png">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/icon-180.png">
     <link rel="stylesheet" href="styles.css">
     <title>Moveez · manage your binge</title>
   </head>
   <body>
+    <svg xmlns="http://www.w3.org/2000/svg" class="sprite" aria-hidden="true">
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M19 7h1M4 17h3M13 17h7"/><circle cx="16" cy="7" r="2.5"/><circle cx="10" cy="17" r="2.5"/></symbol>
+      <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 16v4M17 18h4"/></symbol>
+      <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"/></symbol>
+      <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+      <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+      <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></symbol>
+      <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+    </svg>
+
     <header class="topbar">
-      <a class="brand" href="#" aria-label="Moveez home">
-        <img src="services/gui/app/views/public/logo.png" alt="" width="48" height="48">
-        <span><strong>moveez</strong><small>manage your binge</small></span>
-      </a>
-      <button class="icon-button" id="settingsButton" aria-label="Open settings">⚙</button>
+      <div class="topbar-inner">
+        <a class="brand" href="./" aria-label="Moveez home">
+          <img src="services/gui/app/views/public/logo.png" alt="" width="34" height="34">
+          <span>moveez</span>
+        </a>
+        <nav class="tabs" aria-label="Lists">
+          <button class="tab active" data-view="watchlist" aria-current="page">
+            <svg class="icon"><use href="#i-bookmark"/></svg><span>Watchlist</span><b id="watchCount">0</b>
+          </button>
+          <button class="tab" data-view="binged">
+            <svg class="icon"><use href="#i-check-circle"/></svg><span>Binged</span><b id="bingeCount">0</b>
+          </button>
+        </nav>
+        <button class="icon-button on-brand" id="settingsButton" aria-label="Open settings">
+          <svg class="icon"><use href="#i-sliders"/></svg>
+        </button>
+      </div>
     </header>
 
     <main class="app-shell">
-      <section class="hero">
-        <div>
-          <p class="eyebrow">YOUR PERSONAL CINEMA</p>
-          <h1>What’s next?</h1>
-          <p class="hero-copy">Keep the good stuff close. Find a title, save it, and let future-you pick the perfect binge.</p>
+      <div class="page-head">
+        <h1 id="viewTitle">Watchlist</h1>
+        <div class="page-actions">
+          <button class="button ghost" id="surpriseButton"><svg class="icon"><use href="#i-sparkle"/></svg>Surprise me</button>
+          <button class="button primary" id="addButton"><svg class="icon"><use href="#i-plus"/></svg>Add title</button>
         </div>
-        <button class="surprise-button" id="surpriseButton"><span>✦</span> Surprise me</button>
-      </section>
+      </div>
 
-      <section class="toolbar">
+      <div class="toolbar" role="search">
         <label class="search">
-          <span aria-hidden="true">⌕</span>
-          <input id="searchInput" type="search" placeholder="Search your titles" autocomplete="off">
+          <svg class="icon"><use href="#i-search"/></svg>
+          <input id="searchInput" type="search" placeholder="Filter your list" aria-label="Filter your list" autocomplete="off">
         </label>
-        <button class="add-button" id="addButton">＋ Browse catalogue</button>
-      </section>
+        <div class="filters">
+          <select id="typeFilter" aria-label="Filter by type">
+            <option value="all">All formats</option>
+            <option value="movie">Movies</option>
+            <option value="series">TV series</option>
+          </select>
+          <select id="genreFilter" aria-label="Filter by genre"><option value="all">All genres</option></select>
+          <select id="serviceFilter" aria-label="Filter by streaming service"><option value="all">All services</option></select>
+        </div>
+      </div>
 
-      <section class="filters" aria-label="Filter titles">
-        <select id="typeFilter" aria-label="Filter by type">
-          <option value="all">All formats</option><option value="movie">Movies</option><option value="series">TV series</option>
-        </select>
-        <select id="genreFilter" aria-label="Filter by genre"><option value="all">All genres</option></select>
-        <select id="serviceFilter" aria-label="Filter by streaming service">
-          <option value="all">All services</option><option>Disney+</option><option>Amazon Prime</option><option>Paramount+</option><option>Netflix</option><option>Apple TV+</option>
-        </select>
-      </section>
-
-      <div id="status" class="status" role="status" aria-live="polite"></div>
       <section id="titleGrid" class="title-grid" aria-live="polite"></section>
     </main>
 
-    <dialog id="titleDialog">
-      <form method="dialog" id="titleForm">
-        <div class="dialog-heading"><div><p class="eyebrow">ROTTEN TOMATOES-READY CATALOGUE</p><h2>Browse titles</h2></div><button class="close-button" value="cancel" aria-label="Close">×</button></div>
-        <p class="muted catalogue-note">Search the catalogue, choose a result, and Moveez imports its poster, format, year, genres, and available ratings automatically.</p>
-        <label>Search catalogue<input id="lookupInput" type="search" placeholder="e.g. Dune: Part Two" autocomplete="off"></label>
-        <div id="lookupResults" class="lookup-results"></div>
-        <div class="manual-fields" hidden>
-          <label>Title<input id="titleName" required placeholder="Title"></label>
-          <div class="two-columns"><label>Format<select id="titleType"><option value="movie">Movie</option><option value="series">TV series</option></select></label><label>Year<input id="titleYear" inputmode="numeric" placeholder="2026"></label></div>
-          <div class="two-columns"><label>IMDB rating<input id="imdbRating" type="number" min="0" max="10" step="0.1" placeholder="8.0"></label><label>RT viewer %<input id="rtRating" type="number" min="0" max="100" placeholder="92"></label></div>
-          <label>Genres <input id="titleGenres" placeholder="Action, Sci-Fi"></label>
-          <label>Streaming services <span class="check-row"><span><input type="checkbox" name="service" value="Disney+"> Disney+</span><span><input type="checkbox" name="service" value="Amazon Prime"> Prime</span><span><input type="checkbox" name="service" value="Paramount+"> Paramount+</span><span><input type="checkbox" name="service" value="Netflix"> Netflix</span><span><input type="checkbox" name="service" value="Apple TV+"> Apple TV+</span></span></label>
-          <label class="check-row"><span><input type="checkbox" id="cinemaNow"> Currently in cinema</span><select id="cinema"><option>Filmpalast Bautzen</option><option>CinemaxX Dresden</option><option>UCI Dresden</option></select></label>
-          <label>Poster URL <input id="posterUrl" type="url" placeholder="Optional image URL"></label>
+    <div id="status" class="toast" role="status" aria-live="polite"></div>
+
+    <dialog id="titleDialog" class="sheet tall" aria-labelledby="titleDialogHeading">
+      <div class="dialog-head">
+        <button class="icon-button" id="lookupBack" type="button" aria-label="Back to results" hidden><svg class="icon"><use href="#i-back"/></svg></button>
+        <h2 id="titleDialogHeading">Add title</h2>
+        <button class="icon-button" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="dialog-body">
+        <div id="lookupPane">
+          <label class="search large">
+            <svg class="icon"><use href="#i-search"/></svg>
+            <input id="lookupInput" type="search" placeholder="Search movies and series" aria-label="Search movies and series" autocomplete="off" enterkeyhint="search">
+          </label>
+          <p id="lookupMessage" class="hint"></p>
+          <ul id="lookupResults" class="lookup-results"></ul>
         </div>
-        <button class="primary-button" id="catalogueSaveButton" type="button" disabled>Add selected title to watchlist</button>
+        <div id="detailPane" hidden></div>
+      </div>
+      <div class="dialog-foot" id="detailFoot" hidden>
+        <button class="button primary block" id="confirmAdd" type="button">Add to watchlist</button>
+      </div>
+    </dialog>
+
+    <dialog id="settingsDialog" class="sheet" aria-labelledby="settingsHeading">
+      <form id="settingsForm">
+        <div class="dialog-head">
+          <h2 id="settingsHeading">Settings</h2>
+          <button class="icon-button" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="dialog-body">
+          <p class="hint">Everything is stored only in this browser.</p>
+          <label class="field">OMDb API key
+            <input id="omdbKey" type="password" autocomplete="off" placeholder="Using the built-in Moveez key">
+            <small>Optional. Get your own at omdbapi.com if the shared key hits its daily limit.</small>
+          </label>
+          <fieldset class="field-group">
+            <legend>Surprise me (optional)</legend>
+            <label class="field">LLM endpoint<input id="llmEndpoint" type="url" placeholder="https://api.openai.com/v1/chat/completions"></label>
+            <label class="field">LLM API key<input id="llmKey" type="password" autocomplete="off"></label>
+            <label class="field">LLM model<input id="llmModel" placeholder="gpt-4o-mini"></label>
+          </fieldset>
+        </div>
+        <div class="dialog-foot">
+          <button class="button danger-text" id="clearData" type="button">Clear local data</button>
+          <button class="button primary" type="submit">Save settings</button>
+        </div>
       </form>
     </dialog>
 
-    <nav class="bottom-nav" aria-label="Pages">
-      <button class="bottom-tab active" data-view="watchlist"><span>▣</span><strong>Watchlist</strong><b id="watchCount">0</b></button>
-      <button class="bottom-tab" data-view="binged"><span>🍿</span><strong>Binged</strong><b id="bingeCount">0</b></button>
-    </nav>
-
-    <dialog id="settingsDialog">
-      <form method="dialog" id="settingsForm">
-        <div class="dialog-heading"><div><p class="eyebrow">PRIVATE ON THIS DEVICE</p><h2>Settings</h2></div><button class="close-button" value="cancel" aria-label="Close">×</button></div>
-        <p class="muted">Keys are stored only in this browser. OMDb enables title lookup and ratings. The LLM endpoint is optional and follows an OpenAI-compatible chat API.</p>
-        <label>OMDb API key<input id="omdbKey" type="password" autocomplete="off" placeholder="Optional"></label>
-        <label>LLM endpoint<input id="llmEndpoint" type="url" placeholder="https://api.openai.com/v1/chat/completions"></label>
-        <label>LLM API key<input id="llmKey" type="password" autocomplete="off" placeholder="Optional"></label>
-        <label>LLM model<input id="llmModel" placeholder="gpt-4o-mini"></label>
-        <div class="settings-actions"><button class="danger-button" id="clearData" type="button">Clear local data</button><button class="primary-button" value="default">Save settings</button></div>
+    <dialog id="ratingDialog" class="sheet" aria-labelledby="ratingTitle">
+      <form id="ratingForm">
+        <div class="dialog-head">
+          <h2 id="ratingTitle"></h2>
+          <button class="icon-button" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="dialog-body">
+          <p class="hint">How many popcorn bags does it deserve?</p>
+          <div id="popcornRating" class="popcorn-rating" role="radiogroup" aria-label="Your rating"></div>
+          <label class="field">Watched on<input id="watchedDate" type="date"></label>
+        </div>
+        <div class="dialog-foot">
+          <button class="button primary block" type="submit">Add to binge history</button>
+        </div>
       </form>
     </dialog>
 
-    <dialog id="ratingDialog">
-      <form method="dialog" id="ratingForm">
-        <p class="eyebrow">YOU WATCHED IT</p><h2 id="ratingTitle"></h2>
-        <p class="muted">How many popcorn bags does it deserve?</p>
-        <div id="popcornRating" class="popcorn-rating" role="radiogroup" aria-label="Your rating"></div>
-        <label>Watched on <input id="watchedDate" type="date"></label>
-        <button class="primary-button" id="saveRatingButton" type="button">Add to binge history</button>
-      </form>
-    </dialog>
-
-    <footer><span>Moveez v2 · local-first PWA</span><span>Works offline after first visit</span></footer>
     <script src="app.js"></script>
   </body>
 </html>
