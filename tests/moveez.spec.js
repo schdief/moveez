@@ -89,12 +89,12 @@ async function useTmdbAndCinemas(page) {
 }
 
 async function addTitle(page, title) {
-  await page.getByRole("button", { name: "Add title" }).first().click();
+  await page.getByRole("searchbox", { name: "Search your list or add from IMDb" }).fill(title);
+  await page.locator("#suggestions .lookup-result", { hasText: title }).click();
   const dialog = page.locator("#titleDialog");
-  await dialog.getByRole("searchbox", { name: "Search movies and series" }).fill(title);
-  await dialog.locator(".lookup-result").click();
   await dialog.getByRole("button", { name: "Add to watchlist" }).click();
   await expect(dialog).toBeHidden();
+  await expect(page.getByRole("searchbox")).toHaveValue("");
 }
 
 test("shows the list count in a bubble and adds a title with IMDb, RT audience, moveez score and FSK", async ({ page }) => {
@@ -169,22 +169,36 @@ test("adds a title even while the FSK lookup hangs", async ({ page }) => {
   await expect(cardOf(page, "Arrival").getByRole("img", { name: "FSK unknown" })).toBeVisible();
 });
 
-test("closes the add dialog with the X button", async ({ page }) => {
-  await page.getByRole("button", { name: "Add title" }).first().click();
+test("closes the details with the X button", async ({ page }) => {
+  await page.getByRole("searchbox").fill("Arrival");
+  await page.locator("#suggestions .lookup-result").click();
   const dialog = page.locator("#titleDialog");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Close" }).click();
   await expect(dialog).toBeHidden();
 });
 
-test("prevents adding the same title twice", async ({ page }) => {
+test("one search shows matching titles on the list and suggests the others from IMDb", async ({ page }) => {
   await addTitle(page, "Arrival");
-  await page.getByRole("button", { name: "Add title" }).first().click();
-  const dialog = page.locator("#titleDialog");
-  await dialog.getByRole("searchbox", { name: "Search movies and series" }).fill("Arrival");
-  await expect(dialog.locator(".lookup-result")).toContainText("On your list");
-  await dialog.locator(".lookup-result").click();
-  await expect(dialog.getByRole("button", { name: "Already on your list" })).toBeDisabled();
+  const search = page.getByRole("searchbox");
+
+  await search.fill("Arrival");
+  await expect(page.locator(".card h2")).toHaveText(["Arrival"]);
+  await expect(page.locator("#suggestions")).toContainText("IMDb has nothing else for this search.");
+  await expect(page.locator("#suggestions .lookup-result")).toHaveCount(0);
+
+  await search.fill("Frozen");
+  await expect(page.locator(".card")).toHaveCount(0);
+  await expect(page.locator("#titleGrid")).toContainText("Nothing on this list matches “Frozen”.");
+  await expect(page.locator("#suggestions .lookup-result")).toContainText("Add");
+
+  // A title on the other list is not added twice; tapping it opens that list instead.
+  await search.fill("");
+  await cardOf(page, "Arrival").getByRole("button", { name: "Binged" }).click();
+  await search.fill("Arrival");
+  await page.locator("#suggestions .lookup-result", { hasText: "In Binged" }).click();
+  await expect(page.getByRole("heading", { name: "Binged 1" })).toBeVisible();
+  await expect(page.locator(".card h2")).toHaveText(["Arrival"]);
 });
 
 test("filters titles by format and searches by title", async ({ page }) => {
@@ -196,7 +210,7 @@ test("filters titles by format and searches by title", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Arrival" })).toHaveCount(0);
 
   await page.locator("#searchInput").fill("arrival");
-  await expect(page.getByRole("heading", { name: "No matches" })).toBeVisible();
+  await expect(page.locator(".card")).toHaveCount(0);
 });
 
 test("filters by FSK, hiding titles without a known age rating", async ({ page }) => {

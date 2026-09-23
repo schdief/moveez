@@ -57,14 +57,13 @@
         <h1 id="viewTitle"><span id="viewName">Watchlist</span> <span class="count" id="viewCount">0</span></h1>
         <div class="page-actions">
           <button class="button ghost" id="surpriseButton"><svg class="icon"><use href="#i-sparkle"/></svg>Surprise me</button>
-          <button class="button primary" id="addButton"><svg class="icon"><use href="#i-plus"/></svg>Add title</button>
         </div>
       </div>
 
       <div class="toolbar" role="search">
         <label class="search">
           <svg class="icon"><use href="#i-search"/></svg>
-          <input id="searchInput" type="search" placeholder="Filter your list" aria-label="Filter your list" autocomplete="off">
+          <input id="searchInput" type="search" placeholder="Search your list or add from IMDb" aria-label="Search your list or add from IMDb" autocomplete="off" enterkeyhint="search">
         </label>
         <div class="filters">
           <select id="typeFilter" aria-label="Filter by type">
@@ -86,26 +85,23 @@
       </div>
 
       <section id="titleGrid" class="title-grid" aria-live="polite"></section>
+
+      <section id="suggestions" class="suggestions" aria-labelledby="suggestionsHeading" hidden>
+        <h2 id="suggestionsHeading">Add from IMDb</h2>
+        <p id="lookupMessage" class="hint"></p>
+        <ul id="lookupResults" class="lookup-results"></ul>
+      </section>
     </main>
 
     <div id="status" class="toast" role="status" aria-live="polite"></div>
 
     <dialog id="titleDialog" class="sheet tall" aria-labelledby="titleDialogHeading">
       <div class="dialog-head">
-        <button class="icon-button" id="lookupBack" type="button" aria-label="Back to results" hidden><svg class="icon"><use href="#i-back"/></svg></button>
-        <h2 id="titleDialogHeading">Add title</h2>
+        <h2 id="titleDialogHeading">Details</h2>
         <button class="icon-button" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
       </div>
       <div class="dialog-body">
-        <div id="lookupPane">
-          <label class="search large">
-            <svg class="icon"><use href="#i-search"/></svg>
-            <input id="lookupInput" type="search" placeholder="Search movies and series" aria-label="Search movies and series" autocomplete="off" enterkeyhint="search">
-          </label>
-          <p id="lookupMessage" class="hint"></p>
-          <ul id="lookupResults" class="lookup-results"></ul>
-        </div>
-        <div id="detailPane" hidden></div>
+        <div id="detailPane"></div>
       </div>
       <div class="dialog-foot" id="detailFoot" hidden>
         <button class="button primary block" id="confirmAdd" type="button">Add to watchlist</button>

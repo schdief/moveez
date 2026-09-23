@@ -67,6 +67,7 @@ let sortBy = "added";
 let detail = null;
 let detailToken = 0;
 let lookupController = null;
+let lookupState = { query: "", items: [], message: "" };
 let lookupTimer = null;
 let statusTimer = null;
 
@@ -378,9 +379,12 @@ function card(title) {
 }
 
 function emptyState(filtered) {
-  if (filtered) return `<div class="empty"><h2>No matches</h2><p>Nothing on this list fits your search or filters.</p></div>`;
+  const query = $("searchInput").value.trim();
+  if (filtered && query) return `<p class="empty compact">Nothing on this list matches “${esc(query)}”.</p>`;
+  if (filtered) return `<div class="empty"><h2>No matches</h2><p>Nothing on this list fits your filters.</p></div>`;
+  if (query) return "";
   if (currentView === "binged") return `<div class="empty"><img src="${ASSETS}logo.png" alt=""><h2>Nothing binged yet</h2><p>Tap “Binged” on a title once you have watched it.</p></div>`;
-  return `<div class="empty"><img src="${ASSETS}logo.png" alt=""><h2>Your watchlist is empty</h2><p>Search IMDb for the movies and series you want to watch next.</p><button class="button primary" data-action="add">${icon("plus")}Add title</button></div>`;
+  return `<div class="empty"><img src="${ASSETS}logo.png" alt=""><h2>Your watchlist is empty</h2><p>Search for the movies and series you want to watch next.</p><button class="button primary" data-action="search">${icon("search")}Search IMDb</button></div>`;
 }
 
 // Highest first; titles without a value go to the end (Array#sort is stable, so ties keep list order).
@@ -445,64 +449,59 @@ function render() {
     if (active) tab.setAttribute("aria-current", "page"); else tab.removeAttribute("aria-current");
   });
   $("titleGrid").innerHTML = visible.length ? visible.map(card).join("") : emptyState(inView.length > 0);
+  renderSuggestions();
 }
 
-/* ---------- Add title dialog ---------- */
+/* ---------- Search: the list first, then IMDb suggestions to add ---------- */
 
 function setLookupMessage(message, kind = "") {
   $("lookupMessage").textContent = message;
   $("lookupMessage").className = `hint ${kind}`;
 }
 
-function showLookupPane() {
-  detailToken++;
-  detail = null;
-  $("lookupPane").hidden = false;
-  $("detailPane").hidden = true;
-  $("detailFoot").hidden = true;
-  $("lookupBack").hidden = true;
-  $("titleDialogHeading").textContent = "Add title";
-}
-
-function openAddDialog() {
-  showLookupPane();
-  lookupController?.abort();
-  $("lookupInput").value = "";
-  $("lookupResults").innerHTML = "";
-  setLookupMessage("Search IMDb for a movie or series to add.");
-  $("titleDialog").showModal();
-  $("lookupInput").focus();
-}
-
 function resultRow(item) {
-  const trailing = isOnList(item.imdbID) ? `<span class="pill">On your list</span>` : icon("next");
-  return `<li><button type="button" class="lookup-result" data-imdb="${esc(item.imdbID)}">
+  const onList = titles.find(title => title.imdbID === item.imdbID);
+  const trailing = onList
+    ? `<span class="pill">${onList.seen ? "In Binged" : "On your watchlist"}</span>`
+    : `<span class="add-pill">${icon("plus")}Add</span>`;
+  return `<li><button type="button" class="lookup-result" data-imdb="${esc(item.imdbID)}"${onList ? ` data-view="${onList.seen ? "binged" : "watchlist"}"` : ""}>
     <img src="${esc(posterOf(item.Poster))}" alt="" loading="lazy" data-fallback>
     <span class="result-text"><strong>${esc(item.Title)}</strong><small>${esc(item.Year)} · ${formatLabel(item.Type)}</small></span>
     ${trailing}
   </button></li>`;
 }
 
+function renderSuggestions() {
+  const query = $("searchInput").value.trim();
+  $("suggestions").hidden = !query;
+  if (!query) return;
+  const current = lookupState.query === query;
+  // Titles already shown in the list above are not suggested again.
+  const items = current ? lookupState.items.filter(item => !titles.some(title => title.imdbID === item.imdbID && inCurrentView(title))) : [];
+  $("lookupResults").innerHTML = items.map(resultRow).join("");
+  if (!current) setLookupMessage(query.length < 3 ? "Keep typing to search IMDb…" : "Searching IMDb…");
+  else if (lookupState.message) setLookupMessage(lookupState.message, lookupState.kind);
+  else setLookupMessage(items.length ? "" : "IMDb has nothing else for this search.");
+}
+
 async function lookup(query) {
   lookupController?.abort();
   if (query.length < 3) {
-    $("lookupResults").innerHTML = "";
-    setLookupMessage(query ? "Keep typing…" : "Search IMDb for a movie or series to add.");
+    lookupState = { query, items: [], message: query ? "Keep typing to search IMDb…" : "" };
+    renderSuggestions();
     return;
   }
   lookupController = new AbortController();
-  setLookupMessage("Searching…");
   try {
     const data = await omdb({ s: query }, lookupController.signal);
     const seen = new Set();
-    const results = data.Search.filter(item => (item.Type === "movie" || item.Type === "series") && !seen.has(item.imdbID) && seen.add(item.imdbID));
-    $("lookupResults").innerHTML = results.map(resultRow).join("");
-    setLookupMessage(results.length ? "" : `No movies or series found for “${query}”.`);
+    const items = data.Search.filter(item => (item.Type === "movie" || item.Type === "series") && !seen.has(item.imdbID) && seen.add(item.imdbID));
+    lookupState = { query, items, message: "" };
   } catch (error) {
     if (error.name === "AbortError") return;
-    $("lookupResults").innerHTML = "";
-    setLookupMessage(describeLookupError(error, query), "error");
+    lookupState = { query, items: [], message: describeLookupError(error, query), kind: "error" };
   }
+  renderSuggestions();
 }
 
 function detailHtml(title) {
@@ -526,12 +525,10 @@ function detailHtml(title) {
 async function openDetail(imdbID) {
   const token = ++detailToken;
   detail = null;
-  $("lookupPane").hidden = true;
-  $("detailPane").hidden = false;
   $("detailFoot").hidden = true;
-  $("lookupBack").hidden = false;
   $("titleDialogHeading").textContent = "Details";
   $("detailPane").innerHTML = `<p class="hint">Loading…</p>`;
+  if (!$("titleDialog").open) $("titleDialog").showModal();
   try {
     const data = await omdb({ i: imdbID, plot: "short" });
     if (token !== detailToken) return;
@@ -556,6 +553,7 @@ function addDetail() {
   const entry = { id: newId(), ...detail, fsk: "", streaming: [], seen: false, createdAt: new Date().toISOString() };
   titles.unshift(entry);
   currentView = "watchlist";
+  $("searchInput").value = "";
   persist();
   $("titleDialog").close();
   showStatus(`“${entry.name}” added to your watchlist.`);
@@ -641,18 +639,21 @@ document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", (
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }));
-$("searchInput").addEventListener("input", render);
+$("searchInput").addEventListener("input", event => {
+  render();
+  clearTimeout(lookupTimer);
+  lookupTimer = setTimeout(() => lookup(event.target.value.trim()), 300);
+});
 ["typeFilter", "genreFilter", "serviceFilter", "fskFilter"].forEach(id => $(id).addEventListener("change", render));
 $("sortSelect").addEventListener("change", event => { sortBy = event.target.value; render(); });
 
-$("addButton").addEventListener("click", openAddDialog);
 $("surpriseButton").addEventListener("click", surpriseMe);
 
 $("titleGrid").addEventListener("click", event => {
   const target = event.target.closest("button");
   if (!target) return;
   const title = titles.find(item => item.id === (target.dataset.watch || target.dataset.unwatch || target.dataset.rate || target.dataset.remove));
-  if (target.dataset.action === "add") openAddDialog();
+  if (target.dataset.action === "search") $("searchInput").focus();
   if (!title) return;
   if (target.dataset.watch) {
     Object.assign(title, { seen: true, seenOn: today(), userRating: 0 });
@@ -681,15 +682,17 @@ document.addEventListener("error", event => {
   if (img.tagName === "IMG" && img.hasAttribute("data-fallback") && !img.src.endsWith(NO_COVER)) img.src = NO_COVER;
 }, true);
 
-$("lookupInput").addEventListener("input", event => {
-  clearTimeout(lookupTimer);
-  lookupTimer = setTimeout(() => lookup(event.target.value.trim()), 300);
-});
 $("lookupResults").addEventListener("click", event => {
   const result = event.target.closest("[data-imdb]");
-  if (result) openDetail(result.dataset.imdb);
+  if (!result) return;
+  // Already on the other list: jump there instead of adding it twice.
+  if (result.dataset.view) {
+    currentView = result.dataset.view;
+    render();
+  } else {
+    openDetail(result.dataset.imdb);
+  }
 });
-$("lookupBack").addEventListener("click", () => { showLookupPane(); $("lookupInput").focus(); });
 $("confirmAdd").addEventListener("click", addDetail);
 
 $("settingsButton").addEventListener("click", openSettings);

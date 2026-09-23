@@ -33,18 +33,39 @@ export function parseProgram(html, baseUrl) {
   }).filter(film => film && film.days.length);
 }
 
-async function program(cinema) {
-  const response = await fetch(cinema.url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; moveez; +https://github.com/schdief/moveez)" } });
-  if (!response.ok) throw new Error(`${cinema.name}: HTTP ${response.status}`);
-  return { name: cinema.name, url: cinema.url, films: parseProgram(await response.text(), cinema.url) };
+const HEADERS = {
+  "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "de-DE,de;q=0.9"
+};
+
+async function program(cinema, attempts = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const response = await fetch(cinema.url, { headers: HEADERS, signal: AbortSignal.timeout(20000) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const films = parseProgram(await response.text(), cinema.url);
+      if (!films.length) throw new Error("no films found in the page");
+      return { name: cinema.name, url: cinema.url, films };
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      await new Promise(resolve => setTimeout(resolve, attempt * 3000));
+    }
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const results = await Promise.allSettled(CINEMAS.map(program));
-  const cinemas = results.flatMap((result, index) => {
-    if (result.status === "fulfilled") return [result.value];
-    console.error(`Skipping ${CINEMAS[index].name}: ${result.reason.message}`);
-    return [];
-  });
-  console.log(JSON.stringify({ updatedAt: new Date().toISOString(), cinemas }));
+  const cinemas = [];
+  // Published with the programme, so failures of the workflow run can be seen on the website.
+  const errors = [];
+  for (const cinema of CINEMAS) {
+    try {
+      cinemas.push(await program(cinema));
+    } catch (error) {
+      const message = [error.message, error.cause?.code || error.cause?.message].filter(Boolean).join(": ");
+      console.error(`Skipping ${cinema.name}: ${message}`);
+      errors.push({ cinema: cinema.name, message });
+    }
+  }
+  console.log(JSON.stringify({ updatedAt: new Date().toISOString(), cinemas, errors }));
 }
