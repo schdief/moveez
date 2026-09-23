@@ -6,6 +6,22 @@
 
 [Visit us at www.moveez.de](https://www.moveez.de)
 
+## Moveez PWA reboot
+
+The repository root now contains the GitHub Pages version of Moveez. It is a mobile-first, installable progressive web app for iPhone that keeps the original teal/popcorn identity while combining the old modular services into one static app.
+
+### Design and implementation plan
+
+1. **Single app shell:** two focused views (Watchlist and Binged), responsive cards, search, format/genre/service filters, and a compact add-title flow.
+2. **Local-first data:** titles, cinema selection, services, watched dates, and popcorn ratings are stored in browser `localStorage`, so the app works without a server and can be installed on iOS.
+3. **Optional enrichment:** add an OMDb key in Settings for title lookup and IMDb metadata. Rotten Tomatoes viewer scores remain editable because the public RT API is not browser-safe.
+4. **Personal discovery:** “Surprise me” uses an optional OpenAI-compatible LLM endpoint configured in Settings; without one it chooses an unseen title already on the list.
+5. **Pages delivery:** `.github/workflows/pages.yml` publishes the repository root and `sw.js` caches the app shell for offline use.
+
+Cinema schedules and streaming availability are represented as user-selectable fields for now. Live availability requires provider-specific APIs, location permissions, and an intermediary backend; those are intentionally left as future native/backend features rather than pretending the static PWA has current data.
+
+The test deployment will be available at `https://schdief.github.io/moveez/` after the Pages workflow completes.
+
 Future updates might include:
 - It even alerts you when a movie is running in cinema or is available on a VoD-plattform of your choice.
 - Furthermore you can browse your list by ratings, release date or genre.

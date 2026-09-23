@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#008080">
+    <meta name="description" content="Moveez - your personal movie and TV watchlist">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="services/gui/app/views/public/logo.png">
+    <link rel="stylesheet" href="styles.css">
+    <title>Moveez · manage your binge</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Moveez home">
+        <img src="services/gui/app/views/public/logo.png" alt="" width="48" height="48">
+        <span><strong>moveez</strong><small>manage your binge</small></span>
+      </a>
+      <button class="icon-button" id="settingsButton" aria-label="Open settings">⚙</button>
+    </header>
+
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">YOUR PERSONAL CINEMA</p>
+          <h1>What’s next?</h1>
+          <p class="hero-copy">Keep the good stuff close. Find a title, save it, and let future-you pick the perfect binge.</p>
+        </div>
+        <button class="surprise-button" id="surpriseButton"><span>✦</span> Surprise me</button>
+      </section>
+
+      <nav class="tabs" aria-label="List views">
+        <button class="tab active" data-view="watchlist">Watchlist <b id="watchCount">0</b></button>
+        <button class="tab" data-view="binged">Binged <b id="bingeCount">0</b></button>
+      </nav>
+
+      <section class="toolbar">
+        <label class="search">
+          <span aria-hidden="true">⌕</span>
+          <input id="searchInput" type="search" placeholder="Search your titles" autocomplete="off">
+        </label>
+        <button class="add-button" id="addButton">＋ Add title</button>
+      </section>
+
+      <section class="filters" aria-label="Filter titles">
+        <select id="typeFilter" aria-label="Filter by type">
+          <option value="all">All formats</option><option value="movie">Movies</option><option value="series">TV series</option>
+        </select>
+        <select id="genreFilter" aria-label="Filter by genre"><option value="all">All genres</option></select>
+        <select id="serviceFilter" aria-label="Filter by streaming service">
+          <option value="all">All services</option><option>Disney+</option><option>Amazon Prime</option><option>Paramount+</option><option>Netflix</option><option>Apple TV+</option>
+        </select>
+      </section>
+
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+      <section id="titleGrid" class="title-grid" aria-live="polite"></section>
+    </main>
+
+    <dialog id="titleDialog">
+      <form method="dialog" id="titleForm">
+        <div class="dialog-heading"><div><p class="eyebrow">NEW ENTRY</p><h2>Add a title</h2></div><button class="close-button" value="cancel" aria-label="Close">×</button></div>
+        <label>Search a movie or series<input id="lookupInput" type="search" placeholder="e.g. Dune: Part Two" autocomplete="off"></label>
+        <div id="lookupResults" class="lookup-results"></div>
+        <div class="manual-fields">
+          <label>Title<input id="titleName" required placeholder="Title"></label>
+          <div class="two-columns"><label>Format<select id="titleType"><option value="movie">Movie</option><option value="series">TV series</option></select></label><label>Year<input id="titleYear" inputmode="numeric" placeholder="2026"></label></div>
+          <div class="two-columns"><label>IMDB rating<input id="imdbRating" type="number" min="0" max="10" step="0.1" placeholder="8.0"></label><label>RT viewer %<input id="rtRating" type="number" min="0" max="100" placeholder="92"></label></div>
+          <label>Genres <input id="titleGenres" placeholder="Action, Sci-Fi"></label>
+          <label>Streaming services <span class="check-row"><span><input type="checkbox" name="service" value="Disney+"> Disney+</span><span><input type="checkbox" name="service" value="Amazon Prime"> Prime</span><span><input type="checkbox" name="service" value="Paramount+"> Paramount+</span><span><input type="checkbox" name="service" value="Netflix"> Netflix</span><span><input type="checkbox" name="service" value="Apple TV+"> Apple TV+</span></span></label>
+          <label class="check-row"><span><input type="checkbox" id="cinemaNow"> Currently in cinema</span><select id="cinema"><option>Filmpalast Bautzen</option><option>CinemaxX Dresden</option><option>UCI Dresden</option></select></label>
+          <label>Poster URL <input id="posterUrl" type="url" placeholder="Optional image URL"></label>
+        </div>
+        <button class="primary-button" value="default">Save to watchlist</button>
+      </form>
+    </dialog>
+
+    <dialog id="settingsDialog">
+      <form method="dialog" id="settingsForm">
+        <div class="dialog-heading"><div><p class="eyebrow">PRIVATE ON THIS DEVICE</p><h2>Settings</h2></div><button class="close-button" value="cancel" aria-label="Close">×</button></div>
+        <p class="muted">Keys are stored only in this browser. OMDb enables title lookup and ratings. The LLM endpoint is optional and follows an OpenAI-compatible chat API.</p>
+        <label>OMDb API key<input id="omdbKey" type="password" autocomplete="off" placeholder="Optional"></label>
+        <label>LLM endpoint<input id="llmEndpoint" type="url" placeholder="https://api.openai.com/v1/chat/completions"></label>
+        <label>LLM API key<input id="llmKey" type="password" autocomplete="off" placeholder="Optional"></label>
+        <label>LLM model<input id="llmModel" placeholder="gpt-4o-mini"></label>
+        <div class="settings-actions"><button class="danger-button" id="clearData" type="button">Clear local data</button><button class="primary-button" value="default">Save settings</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="ratingDialog">
+      <form method="dialog" id="ratingForm">
+        <p class="eyebrow">YOU WATCHED IT</p><h2 id="ratingTitle"></h2>
+        <p class="muted">How many popcorn bags does it deserve?</p>
+        <div id="popcornRating" class="popcorn-rating" role="radiogroup" aria-label="Your rating"></div>
+        <label>Watched on <input id="watchedDate" type="date"></label>
+        <button class="primary-button" id="saveRatingButton" type="button">Add to binge history</button>
+      </form>
+    </dialog>
+
+    <footer><span>Moveez v2 · local-first PWA</span><span>Works offline after first visit</span></footer>
+    <script src="app.js"></script>
+  </body>
+</html>
