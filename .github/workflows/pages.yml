@@ -36,7 +36,10 @@ jobs:
         with:
           node-version: 20
       - name: Fetch cinema programmes
-        # A failing source must not block the deployment; the app simply shows no cinemas then.
+        # A failing source must not block the deployment; the last published programme is kept instead.
+        env:
+          NODE_OPTIONS: --dns-result-order=ipv4first
+          PREVIOUS_PROGRAMME: https://schdief.github.io/moveez/data/cinemas.json
         run: mkdir -p data && (node scripts/cinemas.mjs > data/cinemas.json || rm -f data/cinemas.json)
       - name: Stamp build version and keys
         env:

@@ -12,7 +12,7 @@ The repository root now contains the GitHub Pages version of Moveez. It is a mob
 
 ### Design and implementation plan
 
-1. **Single app shell:** two focused pages (Watchlist and Binged, with their counts in the heading) reached through a fixed iPhone-style bottom navigation, responsive cards, search, format/genre/service/FSK filters, sorting (added, release year, IMDb, RT audience, moveez score) and a catalogue picker.
+1. **Single app shell:** three pages (Watchlist, Binged and Cinema – the current programme of the cinemas with showtimes per day), a counter bubble next to the heading, a fixed iPhone-style bottom navigation, one search field that filters the list and suggests IMDb titles to add, format/genre/service/FSK filters and sorting (added, release year, IMDb, RT audience, moveez score).
 2. **Local-first data:** titles, FSK age ratings, streaming services and cinemas, watched dates, and popcorn ratings are stored in browser `localStorage`, so the app works without a server and can be installed on iOS.
 3. **Catalogue import:** use Add title to search OMDb (IMDb data), open a result to see poster, plot, IMDb rating, the Rotten Tomatoes audience score and the **moveez score** (IMDb × RT audience %, so 10 is perfect), jump to the IMDb/Rotten Tomatoes pages, and add it. Nothing else has to be entered by hand: after adding, the app looks up in the background
    - **FSK and streaming services in Germany** via TMDB (streaming offers are JustWatch data). The key comes from the `TMDB_API_KEY` repository secret, stamped in by the Pages workflow (or can be set in Settings); JustWatch itself does not allow browser requests.

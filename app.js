@@ -62,6 +62,7 @@ titles.forEach(title => {
 });
 let settings = load(SETTINGS_KEY, {});
 let cinemaData = null;
+let cinemaDay = null;
 let currentView = "watchlist";
 let sortBy = "added";
 let detail = null;
@@ -430,6 +431,24 @@ function fillSelect(select, allLabel, groups) {
 }
 
 function render() {
+  const cinemaView = currentView === "cinema";
+  document.querySelectorAll(".tab").forEach(tab => {
+    const active = tab.dataset.view === currentView;
+    tab.classList.toggle("active", active);
+    if (active) tab.setAttribute("aria-current", "page"); else tab.removeAttribute("aria-current");
+  });
+  $("surpriseButton").hidden = currentView !== "watchlist";
+  ["typeFilter", "genreFilter", "sortSelect"].forEach(id => { $(id).hidden = cinemaView; });
+  $("dayBar").hidden = !cinemaView;
+  const placeholder = cinemaView ? "Search the cinema programme" : "Search your list or add from IMDb";
+  $("searchInput").placeholder = placeholder;
+  $("searchInput").setAttribute("aria-label", placeholder);
+  if (cinemaView) {
+    renderCinema();
+    renderSuggestions();
+    return;
+  }
+
   const inView = titles.filter(inCurrentView);
   fillSelect($("genreFilter"), "All genres", [["", [...new Set(titles.flatMap(title => title.genres))].sort()]]);
   const streamingNames = [...new Set(inView.flatMap(title => title.streaming.map(service => service.name)))].sort();
@@ -442,14 +461,102 @@ function render() {
   const visible = visibleTitles();
   $("viewName").textContent = currentView === "binged" ? "Binged" : "Watchlist";
   $("viewCount").textContent = inView.length;
-  $("surpriseButton").hidden = currentView === "binged";
-  document.querySelectorAll(".tab").forEach(tab => {
-    const active = tab.dataset.view === currentView;
-    tab.classList.toggle("active", active);
-    if (active) tab.setAttribute("aria-current", "page"); else tab.removeAttribute("aria-current");
-  });
   $("titleGrid").innerHTML = visible.length ? visible.map(card).join("") : emptyState(inView.length > 0);
   renderSuggestions();
+}
+
+/* ---------- Cinema programme ---------- */
+
+// One entry per film with all showtimes of all cinemas (cinemas list the same film under the same German title).
+function cinemaProgramme() {
+  const films = new Map();
+  for (const cinema of cinemaData?.cinemas || []) {
+    const logo = CINEMAS.find(item => item.name === cinema.name)?.logo || "";
+    for (const film of cinema.films) {
+      const key = normalize(film.title);
+      if (!films.has(key)) films.set(key, { key, title: film.title, fsk: film.fsk || "", genres: film.genres || [], runtime: film.runtime || "", poster: film.poster || "", showings: [] });
+      const entry = films.get(key);
+      entry.fsk ||= film.fsk || "";
+      for (const showtime of film.showtimes || []) entry.showings.push({ ...showtime, cinema: cinema.name, logo, url: film.url });
+    }
+  }
+  return [...films.values()];
+}
+
+const nowTime = () => new Date().toTimeString().slice(0, 5);
+const isOver = showing => showing.date < today() || (showing.date === today() && showing.time < nowTime());
+// Days that still have showings ahead (today drops out once the last film has started).
+const cinemaDays = programme => [...new Set(programme.flatMap(film => film.showings.filter(showing => !isOver(showing)).map(showing => showing.date)))].sort();
+
+function dayLabel(date) {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (date === today()) return "Today";
+  if (date === tomorrow.toLocaleDateString("sv-SE")) return "Tomorrow";
+  return new Date(`${date}T00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+}
+
+const onWatchlist = film => titles.find(title => !title.seen && [title.name, title.titleDe].filter(Boolean).map(normalize).some(name => name === film.key || name === normalize(film.title.split(" - ")[0])));
+
+function cinemaCard(film, showings) {
+  const byCinema = CINEMAS.map(cinema => [cinema, showings.filter(showing => showing.cinema === cinema.name)]).filter(([, list]) => list.length);
+  const rows = byCinema.map(([cinema, list]) => `<div class="showtimes">
+      <a class="cinema-name" href="${esc(list[0].url)}" target="_blank" rel="noopener">${logoImg(cinema.logo)}${esc(cinema.name)}</a>
+      <div class="times">${list.map(showing => {
+        const version = showing.version.replace(/^Deutsch\/?/, "").trim();
+        const past = isOver(showing);
+        return `<span class="time${past ? " past" : ""}">${esc(showing.time)}${version ? `<small>${esc(version)}</small>` : ""}</span>`;
+      }).join("")}</div>
+    </div>`).join("");
+  const listed = onWatchlist(film);
+  const action = listed
+    ? `<span class="pill">On your watchlist</span>`
+    : `<button class="button soft small" data-find="${esc(film.title)}">${icon("plus")}Watchlist</button>`;
+  return `<article class="card cinema-film">
+    <img class="poster" src="${esc(posterOf(film.poster))}" alt="" loading="lazy" data-fallback>
+    <div class="card-body">
+      <div class="card-head">
+        <div>
+          <p class="meta">${[film.genres.join(", "), film.runtime].filter(Boolean).map(esc).join(" · ")}</p>
+          <h2>${esc(film.title)}</h2>
+        </div>
+        ${fskBadge(film)}
+      </div>
+      ${rows}
+      <div class="card-actions">${action}</div>
+    </div>
+  </article>`;
+}
+
+function renderCinema() {
+  const programme = cinemaProgramme();
+  const days = cinemaDays(programme);
+  if (!days.includes(cinemaDay)) cinemaDay = days[0] || null;
+  fillSelect($("serviceFilter"), "All cinemas", [["", CINEMAS.map(cinema => cinema.name).filter(name => cinemaData?.cinemas.some(cinema => cinema.name === name))]]);
+  $("dayBar").innerHTML = days.map(date => `<button type="button" class="day${date === cinemaDay ? " active" : ""}" data-day="${date}" aria-pressed="${date === cinemaDay}">${esc(dayLabel(date))}</button>`).join("");
+
+  const query = normalize($("searchInput").value);
+  const cinema = $("serviceFilter").value;
+  const fsk = $("fskFilter").value;
+  const films = programme
+    .map(film => [film, film.showings
+      .filter(showing => showing.date === cinemaDay && (cinema === "all" || showing.cinema === cinema))
+      .sort((a, b) => a.time.localeCompare(b.time))])
+    .filter(([film, showings]) => showings.some(showing => !isOver(showing))
+      && (!query || normalize(film.title).includes(query))
+      && (fsk === "all" || (FSK_LEVELS.includes(film.fsk) && Number(film.fsk) <= Number(fsk))))
+    // Earliest showtime of the day first.
+    .sort(([, a], [, b]) => a[0].time.localeCompare(b[0].time));
+
+  $("viewName").textContent = "Cinema";
+  $("viewCount").textContent = films.length;
+  if (!days.length) {
+    $("titleGrid").innerHTML = `<div class="empty"><img src="${ASSETS}logo.png" alt=""><h2>No cinema programme</h2><p>The programme of your cinemas could not be loaded right now.</p></div>`;
+    return;
+  }
+  $("titleGrid").innerHTML = films.length
+    ? films.map(([film, showings]) => cinemaCard(film, showings)).join("")
+    : `<div class="empty"><h2>No matches</h2><p>Nothing on ${esc(dayLabel(cinemaDay))} fits your search or filters.</p></div>`;
 }
 
 /* ---------- Search: the list first, then IMDb suggestions to add ---------- */
@@ -473,8 +580,8 @@ function resultRow(item) {
 
 function renderSuggestions() {
   const query = $("searchInput").value.trim();
-  $("suggestions").hidden = !query;
-  if (!query) return;
+  $("suggestions").hidden = !query || currentView === "cinema";
+  if ($("suggestions").hidden) return;
   const current = lookupState.query === query;
   // Titles already shown in the list above are not suggested again.
   const items = current ? lookupState.items.filter(item => !titles.some(title => title.imdbID === item.imdbID && inCurrentView(title))) : [];
@@ -642,10 +749,14 @@ document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", (
 $("searchInput").addEventListener("input", event => {
   render();
   clearTimeout(lookupTimer);
-  lookupTimer = setTimeout(() => lookup(event.target.value.trim()), 300);
+  if (currentView !== "cinema") lookupTimer = setTimeout(() => lookup(event.target.value.trim()), 300);
 });
 ["typeFilter", "genreFilter", "serviceFilter", "fskFilter"].forEach(id => $(id).addEventListener("change", render));
 $("sortSelect").addEventListener("change", event => { sortBy = event.target.value; render(); });
+$("dayBar").addEventListener("click", event => {
+  const day = event.target.closest("[data-day]");
+  if (day) { cinemaDay = day.dataset.day; render(); }
+});
 
 $("surpriseButton").addEventListener("click", surpriseMe);
 
@@ -654,6 +765,14 @@ $("titleGrid").addEventListener("click", event => {
   if (!target) return;
   const title = titles.find(item => item.id === (target.dataset.watch || target.dataset.unwatch || target.dataset.rate || target.dataset.remove));
   if (target.dataset.action === "search") $("searchInput").focus();
+  // Cinema tab: look the film up on IMDb through the normal search.
+  if (target.dataset.find) {
+    currentView = "watchlist";
+    $("searchInput").value = target.dataset.find;
+    render();
+    lookup(target.dataset.find);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
   if (!title) return;
   if (target.dataset.watch) {
     Object.assign(title, { seen: true, seenOn: today(), userRating: 0 });

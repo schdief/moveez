@@ -11,10 +11,16 @@ const TMDB = {
   "The Odyssey": { fsk: "12", titleDe: "Die Odyssee", flatrate: [] },
   "The Bear": { fsk: "16", titleDe: "The Bear: King of the Kitchen", flatrate: ["Disney Plus", "WOW"] }
 };
+const day = offset => { const date = new Date(); date.setDate(date.getDate() + offset); return date.toLocaleDateString("sv-SE"); };
 const CINEMAS = {
   cinemas: [
-    { name: "CinemaxX Dresden", url: "https://www.kinoprogramm.com/kino/dresden/cinemaxx-42197", films: [{ title: "Die Odyssee", fsk: "12", days: ["2026-09-23"], url: "https://www.kinoprogramm.com/kino/dresden/cinemaxx/die-odyssee-1" }] },
-    { name: "UCI Dresden", url: "https://www.kinoprogramm.com/kino/dresden/uci-kinowelt-elbe-park-40872", films: [{ title: "Toy Story 5", fsk: "0", days: ["2026-09-23"], url: "https://www.kinoprogramm.com/kino/dresden/uci/toy-story-5-2" }] }
+    { name: "CinemaxX Dresden", url: "https://www.kinoprogramm.com/kino/dresden/cinemaxx-42197", films: [
+      { title: "Die Odyssee", fsk: "12", genres: ["Abenteuer"], runtime: "150 Min.", days: [day(0)], showtimes: [{ date: day(0), time: "23:40", version: "Deutsch" }], url: "https://www.kinoprogramm.com/kino/dresden/cinemaxx/die-odyssee-1" },
+      { title: "Toy Story 5", fsk: "0", genres: ["Trickfilm"], runtime: "97 Min.", days: [day(1)], showtimes: [{ date: day(1), time: "15:15", version: "Deutsch" }], url: "https://www.kinoprogramm.com/kino/dresden/cinemaxx/toy-story-5-2" }
+    ] },
+    { name: "UCI Dresden", url: "https://www.kinoprogramm.com/kino/dresden/uci-kinowelt-elbe-park-40872", films: [
+      { title: "Toy Story 5", fsk: "0", genres: ["Trickfilm"], runtime: "97 Min.", days: [day(0), day(1)], showtimes: [{ date: day(0), time: "23:50", version: "Deutsch/3D" }, { date: day(1), time: "13:50", version: "Deutsch" }], url: "https://www.kinoprogramm.com/kino/dresden/uci/toy-story-5-2" }
+    ] }
   ]
 };
 
@@ -133,12 +139,44 @@ test("shows the cinemas that are playing a movie, also under its German title", 
   await addTitle(page, "Toy Story 5");
   await addTitle(page, "The Odyssey");
 
-  await expect(cardOf(page, "Toy Story 5").locator(".chip.provider")).toHaveText(["UCI Dresden", "Disney+"]);
+  await expect(cardOf(page, "Toy Story 5").locator(".chip.provider")).toHaveText(["CinemaxX Dresden", "UCI Dresden", "Disney+"]);
   const odyssey = cardOf(page, "The Odyssey").getByRole("link", { name: "CinemaxX Dresden" });
   await expect(odyssey).toHaveAttribute("href", "https://www.kinoprogramm.com/kino/dresden/cinemaxx/die-odyssee-1");
 
-  await page.getByLabel("Filter by service or cinema").selectOption("CinemaxX Dresden");
-  await expect(page.locator(".card h2")).toHaveText(["The Odyssey"]);
+  await page.getByLabel("Filter by service or cinema").selectOption("UCI Dresden");
+  await expect(page.locator(".card h2")).toHaveText(["Toy Story 5"]);
+});
+
+test("the cinema tab shows the programme of the cinemas by day with showtimes", async ({ page }) => {
+  // Showtimes that have started are hidden, so pin the clock to the morning.
+  await page.clock.setFixedTime(new Date(`${day(0)}T10:00`));
+  await useTmdbAndCinemas(page);
+  await addTitle(page, "Toy Story 5");
+  await tab(page, "Cinema").tap();
+
+  await expect(page.getByRole("heading", { name: "Cinema 2" })).toBeVisible();
+  await expect(page.locator("#dayBar .day")).toHaveText(["Today", "Tomorrow"]);
+  // Earliest showtime first; the watchlist title is recognised.
+  await expect(page.locator(".card h2")).toHaveText(["Die Odyssee", "Toy Story 5"]);
+  const toyStory = cardOf(page, "Toy Story 5");
+  await expect(toyStory.locator(".time")).toHaveText(["23:503D"]);
+  await expect(toyStory).toContainText("On your watchlist");
+
+  await page.locator("#dayBar").getByRole("button", { name: "Tomorrow" }).tap();
+  await expect(page.locator(".card h2")).toHaveText(["Toy Story 5"]);
+  await expect(toyStory.locator(".showtimes")).toHaveCount(2);
+  await expect(toyStory.locator(".time")).toHaveText(["15:15", "13:50"]);
+
+  // The FSK filter also applies to the cinema programme.
+  await page.locator("#dayBar").getByRole("button", { name: "Today" }).tap();
+  await page.getByLabel("Filter by age rating").selectOption("6");
+  await expect(page.locator(".card h2")).toHaveText(["Toy Story 5"]);
+
+  // Films not on the watchlist can be looked up on IMDb from here.
+  await page.getByLabel("Filter by age rating").selectOption("all");
+  await cardOf(page, "Die Odyssee").getByRole("button", { name: "Watchlist" }).tap();
+  await expect(page.getByRole("searchbox")).toHaveValue("Die Odyssee");
+  await expect(page.locator("#suggestions .lookup-result")).toContainText("Die Odyssee");
 });
 
 test("refreshes watchlist ratings and missing FSK in the background after start-up", async ({ page }) => {

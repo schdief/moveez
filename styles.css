@@ -239,6 +239,20 @@ a.rating:hover span:last-child { text-decoration: underline; }
 .empty p { margin: 0 auto 18px; max-width: 360px; }
 .empty.compact { padding: 8px 4px; margin: 0; text-align: left; }
 
+/* ---------- Cinema programme ---------- */
+.day-bar { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: -8px -14px 16px; padding: 0 14px; }
+.day-bar::-webkit-scrollbar { display: none; }
+.day { flex: none; padding: 7px 14px; border-radius: 20px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font-size: .85rem; font-weight: 650; color: var(--ink); }
+.day.active { background: var(--brand); color: #fff; box-shadow: none; }
+.showtimes { display: flex; flex-direction: column; gap: 5px; }
+.cinema-name { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 700; color: var(--brand-dark); text-decoration: none; }
+.cinema-name img { width: 16px; height: 16px; border-radius: 50%; }
+.times { display: flex; flex-wrap: wrap; gap: 5px; }
+.time { display: inline-flex; flex-direction: column; align-items: center; min-width: 52px; padding: 4px 8px; border-radius: 8px; background: var(--brand-soft); color: var(--brand-dark); font-weight: 750; font-size: .88rem; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.time small { font-size: .6rem; font-weight: 600; opacity: .8; }
+.time.past { background: var(--paper); color: var(--muted); text-decoration: line-through; }
+.cinema-film .card-actions { justify-content: flex-start; }
+
 /* ---------- IMDb suggestions below the list ---------- */
 .suggestions { margin-top: 22px; }
 .suggestions h2 { font-size: 1.05rem; margin-bottom: 4px; }
