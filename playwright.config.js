@@ -7,10 +7,10 @@ module.exports = defineConfig({
   use: {
     baseURL: "http://127.0.0.1:4173",
     trace: "retain-on-failure",
+    // Moveez targets iOS only: WebKit (the Safari engine) with the iPhone profile.
     ...devices["iPhone 13"],
-    // GitHub Actions installs Chromium; retain the iPhone viewport/touch profile
-    // without requiring a separate WebKit download.
-    browserName: "chromium"
+    // In WebKit, requests of a page controlled by a service worker bypass page.route mocks.
+    serviceWorkers: "block"
   },
   webServer: {
     command: "python3 -m http.server 4173",

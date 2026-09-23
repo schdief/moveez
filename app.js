@@ -1,4 +1,5 @@
 const STORAGE_KEY = "moveez-titles-v2";
+const BUILD = "__BUILD__";
 const SETTINGS_KEY = "moveez-settings-v2";
 // Public key that the original Moveez GUI shipped with; users can set their own in Settings.
 const DEFAULT_OMDB_KEY = "b50af808";
@@ -6,8 +7,20 @@ const DEFAULT_OMDB_KEY = "b50af808";
 // which is the only browser-reachable source of the audience score.
 const RT_SEARCH = "https://79frdp12pn-dsn.algolia.net/1/indexes/content_rt/query?x-algolia-application-id=79FRDP12PN&x-algolia-api-key=175588f6e5f8319b27702e4cc4013561";
 const REFRESH_AFTER_MS = 12 * 60 * 60 * 1000;
-const SERVICES = ["Netflix", "Amazon Prime", "Disney+", "Apple TV+", "Paramount+"];
-const CINEMAS = ["Filmpalast Bautzen", "CinemaxX Dresden", "UCI Dresden"];
+const REQUEST_TIMEOUT_MS = 10000;
+const PROVIDERS = [
+  { name: "Netflix", logo: "netflix" },
+  { name: "Amazon Prime", logo: "prime-video" },
+  { name: "Disney+", logo: "disney-plus" },
+  { name: "Apple TV+", logo: "apple-tv" },
+  { name: "Paramount+", logo: "paramount-plus" },
+  { name: "CinemaxX Dresden", logo: "cinemaxx", cinema: true },
+  { name: "Filmpalast Bautzen", logo: "filmpalast", cinema: true },
+  { name: "UCI Dresden", logo: "uci", cinema: true }
+];
+const FSK_LEVELS = ["0", "6", "12", "16", "18"];
+// Wikidata items for the FSK age ratings (property P1981).
+const FSK_ITEMS = { Q20644794: "0", Q20644795: "6", Q20644796: "12", Q20644797: "16", Q20644798: "18" };
 const ASSETS = "services/gui/app/views/public/";
 const NO_COVER = `${ASSETS}nocover.png`;
 
@@ -19,13 +32,25 @@ function load(key, fallback) {
 }
 
 let titles = load(STORAGE_KEY, []);
-// Earlier versions stored the RT critics score (Tomatometer) as rtRating; Moveez uses the audience score.
-titles.forEach(title => { delete title.rtRating; });
+titles.forEach(title => {
+  // Earlier versions stored the RT critics score (Tomatometer) as rtRating; Moveez uses the audience score.
+  delete title.rtRating;
+  title.genres ||= [];
+  title.services ||= [];
+  // Cinemas used to be a separate "now in cinema" flag; they are regular providers now.
+  if (title.cinemaNow && title.cinema && !title.services.includes(title.cinema)) title.services.push(title.cinema);
+  delete title.cinemaNow;
+  delete title.cinema;
+  title.fsk ??= "";
+});
 let settings = load(SETTINGS_KEY, {});
 let currentView = "watchlist";
+let sortBy = "added";
+let editTargetId = null;
 let selectedRating = 0;
 let ratingTargetId = null;
 let detail = null;
+let detailFskLookup = null;
 let detailToken = 0;
 let lookupController = null;
 let lookupTimer = null;
@@ -62,11 +87,29 @@ function formatDate(value) {
 
 /* ---------- OMDb ---------- */
 
+// A stalled request must never leave the app waiting forever (WebKit sometimes never answers Wikidata requests).
+async function fetchJson(url, { signal, ...options } = {}) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const abort = () => controller.abort();
+  const timer = setTimeout(() => { timedOut = true; abort(); }, REQUEST_TIMEOUT_MS);
+  signal?.addEventListener("abort", abort, { once: true });
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    const data = await response.json().catch(error => { if (error.name === "AbortError") throw error; return {}; });
+    return { response, data };
+  } catch (error) {
+    throw timedOut ? new Error("The request timed out.") : error;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+  }
+}
+
 async function omdb(params, signal) {
   const url = new URL("https://www.omdbapi.com/");
   url.search = new URLSearchParams({ apikey: settings.omdbKey || DEFAULT_OMDB_KEY, ...params });
-  const response = await fetch(url, { signal });
-  const data = await response.json().catch(() => ({}));
+  const { response, data } = await fetchJson(url, { signal });
   if (data.Response === "True") return data;
   throw new Error(data.Error || `OMDb responded with ${response.status}`);
 }
@@ -101,9 +144,9 @@ const normalize = value => String(value || "").toLowerCase().normalize("NFKD").r
 async function fetchRtAudience(title) {
   const params = new URLSearchParams({ query: title.name, hitsPerPage: "10", attributesToRetrieve: JSON.stringify(["title", "titles", "type", "releaseYear", "vanity", "rottenTomatoes"]) });
   // form-urlencoded keeps this a CORS "simple" request (no preflight); Algolia still parses the JSON body.
-  const response = await fetch(RT_SEARCH, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: JSON.stringify({ params: params.toString() }) });
+  const { response, data } = await fetchJson(RT_SEARCH, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: JSON.stringify({ params: params.toString() }) });
   if (!response.ok) throw new Error(`Rotten Tomatoes responded with ${response.status}`);
-  const { hits = [] } = await response.json();
+  const { hits = [] } = data;
   const type = title.type === "series" ? "tv" : "movie";
   const year = parseInt(title.year, 10);
   const name = normalize(title.name);
@@ -123,6 +166,34 @@ function moveezScore(title) {
   const audience = parseFloat(title.rtAudience);
   return Number.isFinite(imdb) && Number.isFinite(audience) ? (Math.round(imdb * audience / 10) / 10).toFixed(1) : "";
 }
+
+/* ---------- FSK age rating ---------- */
+
+// OMDb only knows US ratings, so the German FSK comes from Wikidata. Resolves to { imdbID: "12", … }.
+async function fetchFsk(imdbIDs) {
+  const ids = [...new Set(imdbIDs)].filter(id => /^tt\d+$/.test(id));
+  if (!ids.length) return {};
+  const query = `SELECT ?imdb ?fsk WHERE { VALUES ?imdb { ${ids.map(id => `"${id}"`).join(" ")} } ?item wdt:P345 ?imdb; wdt:P1981 ?fsk. }`;
+  const { response, data } = await fetchJson(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(query)}`, { headers: { Accept: "application/sparql-results+json" } });
+  if (!response.ok) throw new Error(`Wikidata responded with ${response.status}`);
+  const { results } = data;
+  const found = {};
+  for (const row of results?.bindings || []) {
+    const fsk = FSK_ITEMS[row.fsk?.value.split("/").pop()];
+    const id = row.imdb?.value;
+    // If Wikidata lists several ratings (e.g. re-releases), the strictest one wins.
+    if (fsk && id && (!found[id] || Number(fsk) > Number(found[id]))) found[id] = fsk;
+  }
+  return found;
+}
+
+const fskOf = title => (FSK_LEVELS.includes(title.fsk) ? title.fsk : "");
+function fskBadge(title, attributes = "") {
+  const fsk = fskOf(title);
+  const label = fsk ? `FSK ${fsk}` : "FSK unknown";
+  return `<button type="button" class="fsk fsk-${fsk || "unknown"}" ${attributes} aria-label="${label} – change" title="${label}"><small>FSK</small><b>${fsk || "?"}</b></button>`;
+}
+const fskOptions = selected => `<option value="">Unknown</option>${FSK_LEVELS.map(level => `<option value="${level}"${level === selected ? " selected" : ""}>FSK ${level}</option>`).join("")}`;
 
 /* ---------- Background rating refresh ---------- */
 
@@ -154,6 +225,17 @@ async function refreshRatings() {
     }
     if (changed) persist();
   }
+  // FSK ratings rarely change: only look up titles that have none yet (one request for all of them).
+  const fskDue = titles.filter(title => title.imdbID && !title.fskManual && !fskOf(title));
+  if (!fskDue.length) return;
+  try {
+    const found = await fetchFsk(fskDue.map(title => title.imdbID));
+    let changed = false;
+    for (const title of titles) {
+      if (found[title.imdbID] && !title.fskManual && !fskOf(title)) { title.fsk = found[title.imdbID]; changed = true; }
+    }
+    if (changed) persist();
+  } catch { /* try again on the next start */ }
 }
 
 /* ---------- Rendering ---------- */
@@ -172,26 +254,38 @@ function ratingsHtml(title) {
   return moveez || imdb || rt ? `<div class="ratings">${moveez}${imdb}${rt}</div>` : "";
 }
 
+const providerOf = name => PROVIDERS.find(provider => provider.name === name);
+const providerLogo = name => (providerOf(name) ? `<img src="icons/providers/${providerOf(name).logo}.png" alt="">` : "");
+const providerChips = names => names.map(name => `<span class="chip provider">${providerLogo(name)}${esc(name)}</span>`).join("");
+function providerToggles(selected = []) {
+  return PROVIDERS.map(({ name }) => `<label><input type="checkbox" name="provider" value="${esc(name)}"${selected.includes(name) ? " checked" : ""}><span>${providerLogo(name)}${esc(name)}</span></label>`).join("");
+}
+const checkedProviders = container => [...container.querySelectorAll('input[name="provider"]:checked')].map(input => input.value);
+
 function card(title) {
   const genres = title.genres.map(genre => `<span class="chip">${esc(genre)}</span>`).join("");
-  const services = title.services.map(service => `<span class="chip outline">${esc(service)}</span>`).join("");
-  const cinema = !title.seen && title.cinemaNow ? `<div class="note">Now in cinema · ${esc(title.cinema)}</div>` : "";
+  const providers = providerChips(title.services);
   const watched = title.seen
     ? `<div class="note">Watched ${esc(formatDate(title.seenOn || ""))}${title.userRating ? ` · <span class="popcorn" aria-label="${title.userRating} of 5">${"🍿".repeat(title.userRating)}</span>` : ""}</div>`
     : "";
   const primary = title.seen
     ? `<button class="button soft small" data-unwatch="${esc(title.id)}">${icon("undo")}Watch again</button>`
-    : `<button class="button primary small" data-watch="${esc(title.id)}">${icon("check")}Mark watched</button>`;
+    : `<button class="button primary small" data-watch="${esc(title.id)}">${icon("check")}Binged</button>`;
   return `<article class="card">
     <img class="poster" src="${esc(posterOf(title.poster))}" alt="" loading="lazy" data-fallback>
     <div class="card-body">
-      <p class="meta">${formatLabel(title.type)}${title.year ? ` · ${esc(title.year)}` : ""}</p>
-      <h2>${esc(title.name)}</h2>
+      <div class="card-head">
+        <div>
+          <p class="meta">${formatLabel(title.type)}${title.year ? ` · ${esc(title.year)}` : ""}</p>
+          <h2>${esc(title.name)}</h2>
+        </div>
+        ${fskBadge(title, `data-edit="${esc(title.id)}"`)}
+      </div>
       ${ratingsHtml(title)}
       ${genres ? `<div class="chips">${genres}</div>` : ""}
-      ${services ? `<div class="chips">${services}</div>` : ""}
-      ${cinema}${watched}
-      <div class="card-actions">${primary}<button class="icon-button" data-remove="${esc(title.id)}" aria-label="Remove ${esc(title.name)}" title="Remove">${icon("trash")}</button></div>
+      ${providers ? `<div class="chips">${providers}</div>` : ""}
+      ${watched}
+      <div class="card-actions">${primary}<span class="card-tools"><button class="icon-button" data-edit="${esc(title.id)}" aria-label="Edit ${esc(title.name)}" title="Edit FSK and where to watch">${icon("edit")}</button><button class="icon-button danger" data-remove="${esc(title.id)}" aria-label="Remove ${esc(title.name)}" title="Remove">${icon("trash")}</button></span></div>
     </div>
   </article>`;
 }
@@ -202,26 +296,51 @@ function emptyState(filtered) {
   return `<div class="empty"><img src="${ASSETS}logo.png" alt=""><h2>Your watchlist is empty</h2><p>Search IMDb for the movies and series you want to watch next.</p><button class="button primary" data-action="add">${icon("plus")}Add title</button></div>`;
 }
 
-function render() {
+// Highest first; titles without a value go to the end (Array#sort is stable, so ties keep list order).
+const descending = value => (a, b) => {
+  const x = value(a), y = value(b);
+  if (Number.isNaN(x)) return Number.isNaN(y) ? 0 : 1;
+  return Number.isNaN(y) ? -1 : y - x;
+};
+const SORTS = {
+  added: { label: "Recently added", compare: descending(title => Date.parse(title.createdAt)) },
+  binged: { label: "Recently binged", compare: descending(title => Date.parse(title.seenOn)) },
+  year: { label: "Release year", compare: descending(title => parseInt(title.year, 10)) },
+  imdb: { label: "IMDb rating", compare: descending(title => parseFloat(title.imdbRating)) },
+  rt: { label: "RT audience", compare: descending(title => parseFloat(title.rtAudience)) },
+  moveez: { label: "moveez score", compare: descending(title => parseFloat(moveezScore(title))) }
+};
+
+function visibleTitles() {
   const query = $("searchInput").value.trim().toLowerCase();
   const type = $("typeFilter").value;
   const service = $("serviceFilter").value;
+  const genre = $("genreFilter").value;
+  const fsk = $("fskFilter").value;
+  return titles
+    .filter(title => (currentView === "binged" ? title.seen : !title.seen))
+    .filter(title => !query || title.name.toLowerCase().includes(query))
+    .filter(title => type === "all" || title.type === type)
+    .filter(title => genre === "all" || title.genres.includes(genre))
+    .filter(title => service === "all" || title.services.includes(service))
+    // With an age limit, titles without a known FSK are hidden: better safe with kids around.
+    .filter(title => fsk === "all" || (fskOf(title) !== "" && Number(fskOf(title)) <= Number(fsk)))
+    .sort(SORTS[sortBy].compare);
+}
+
+function render() {
   const genres = [...new Set(titles.flatMap(title => title.genres))].sort();
   const genre = genres.includes($("genreFilter").value) ? $("genreFilter").value : "all";
   $("genreFilter").innerHTML = `<option value="all">All genres</option>${genres.map(item => `<option>${esc(item)}</option>`).join("")}`;
   $("genreFilter").value = genre;
+  const sorts = Object.keys(SORTS).filter(key => key !== "binged" || currentView === "binged");
+  $("sortSelect").innerHTML = sorts.map(key => `<option value="${key}">${SORTS[key].label}</option>`).join("");
+  $("sortSelect").value = sortBy;
 
   const inView = titles.filter(title => (currentView === "binged" ? title.seen : !title.seen));
-  const visible = inView
-    .filter(title => !query || title.name.toLowerCase().includes(query))
-    .filter(title => type === "all" || title.type === type)
-    .filter(title => genre === "all" || title.genres.includes(genre))
-    .filter(title => service === "all" || title.services.includes(service));
-  if (currentView === "binged") visible.sort((a, b) => String(b.seenOn || "").localeCompare(String(a.seenOn || "")));
+  const visible = visibleTitles();
 
-  $("watchCount").textContent = titles.filter(title => !title.seen).length;
-  $("bingeCount").textContent = titles.filter(title => title.seen).length;
-  $("viewTitle").textContent = currentView === "binged" ? "Binged" : "Watchlist";
+  $("viewTitle").textContent = `${currentView === "binged" ? "Binged" : "Watchlist"} (${inView.length})`;
   $("surpriseButton").hidden = currentView === "binged";
   document.querySelectorAll(".tab").forEach(tab => {
     const active = tab.dataset.view === currentView;
@@ -292,8 +411,6 @@ async function lookup(query) {
 function detailHtml(title) {
   const onList = isOnList(title.imdbID);
   const meta = [formatLabel(title.type), title.year, title.runtime].filter(Boolean).map(esc).join(" · ");
-  const services = SERVICES.map(service => `<label><input type="checkbox" name="service" value="${esc(service)}"><span>${esc(service)}</span></label>`).join("");
-  const cinemas = CINEMAS.map(cinema => `<option>${esc(cinema)}</option>`).join("");
   return `<div class="detail">
       <img src="${esc(posterOf(title.poster))}" alt="" data-fallback>
       <div>
@@ -309,10 +426,9 @@ function detailHtml(title) {
       <a class="button ghost small" href="${esc(rtUrl(title))}" target="_blank" rel="noopener">Rotten Tomatoes ${icon("external")}</a>
     </div>
     ${onList ? "" : `<div class="detail-options">
-      <h4>Streaming on</h4>
-      <div class="toggle-chips">${services}</div>
-      <h4>Cinema</h4>
-      <div class="cinema-row"><label><input type="checkbox" id="cinemaNow"> Currently showing at</label><select id="cinema" aria-label="Cinema">${cinemas}</select></div>
+      <label class="field">Age rating (FSK)<select id="detailFsk">${fskOptions(title.fsk)}</select><small id="detailFskHint">Looking it up on Wikidata…</small></label>
+      <h4>Where to watch</h4>
+      <div class="toggle-chips">${providerToggles()}</div>
     </div>`}`;
 }
 
@@ -325,19 +441,26 @@ async function openDetail(imdbID) {
   $("lookupBack").hidden = false;
   $("titleDialogHeading").textContent = "Details";
   $("detailPane").innerHTML = `<p class="hint">Loading…</p>`;
+  // Wikidata only needs the IMDb id, so the FSK lookup starts right away and never holds up the details.
+  const fskLookup = detailFskLookup = fetchFsk([imdbID]).catch(() => ({}));
   try {
     const data = await omdb({ i: imdbID, plot: "short" });
     if (token !== detailToken) return;
     const base = toTitle(data);
     const rt = await fetchRtAudience(base).catch(() => ({ rtAudience: "", rtUrl: "" }));
     if (token !== detailToken) return;
-    detail = { ...base, ...rt, ratingsUpdatedAt: new Date().toISOString() };
+    detail = { ...base, ...rt, fsk: "", ratingsUpdatedAt: new Date().toISOString() };
     const onList = isOnList(detail.imdbID);
     $("titleDialogHeading").textContent = detail.name;
     $("detailPane").innerHTML = detailHtml(detail);
     $("confirmAdd").disabled = onList;
     $("confirmAdd").textContent = onList ? "Already on your list" : "Add to watchlist";
     $("detailFoot").hidden = false;
+    const found = (await fskLookup)[imdbID];
+    if (token !== detailToken || !$("detailFsk")) return;
+    detail.fsk = found || "";
+    if (found && !$("detailFsk").value) $("detailFsk").value = found;
+    $("detailFskHint").textContent = found ? "Found on Wikidata – change it if it is wrong." : "Not found on Wikidata – please set it yourself.";
   } catch (error) {
     if (token !== detailToken) return;
     $("detailPane").innerHTML = `<p class="hint error">The details could not be loaded. ${esc(error.message)}</p>`;
@@ -346,16 +469,21 @@ async function openDetail(imdbID) {
 
 function addDetail() {
   if (!detail || isOnList(detail.imdbID)) return;
+  const fsk = $("detailFsk").value;
   const entry = {
     id: newId(),
     ...detail,
-    services: [...$("detailPane").querySelectorAll('input[name="service"]:checked')].map(input => input.value),
-    cinemaNow: $("cinemaNow").checked,
-    cinema: $("cinema").value,
+    fsk,
+    fskManual: fsk !== detail.fsk,
+    services: checkedProviders($("detailPane")),
     seen: false,
     createdAt: new Date().toISOString()
   };
   titles.unshift(entry);
+  // Added before Wikidata answered: fill in the FSK as soon as it arrives.
+  if (!entry.fsk) detailFskLookup?.then(found => {
+    if (found[entry.imdbID] && !entry.fsk && !entry.fskManual && titles.includes(entry)) { entry.fsk = found[entry.imdbID]; persist(); }
+  });
   if (currentView !== "watchlist") currentView = "watchlist";
   persist();
   $("titleDialog").close();
@@ -365,10 +493,11 @@ function addDetail() {
 /* ---------- Surprise me ---------- */
 
 async function surpriseMe() {
-  const unseen = titles.filter(title => !title.seen);
+  // Picks from the current filters, so an FSK limit also applies to the surprise.
+  const unseen = visibleTitles();
   const hasLlm = Boolean(settings.llmEndpoint && settings.llmKey);
   if (!unseen.length && !hasLlm) {
-    showStatus("Add a few titles first, then I can pick one for you.");
+    showStatus(titles.some(title => !title.seen) ? "No title on your watchlist matches the filters." : "Add a few titles first, then I can pick one for you.");
     return;
   }
   const button = $("surpriseButton");
@@ -425,16 +554,32 @@ function openRating(id) {
   $("ratingDialog").showModal();
 }
 
+/* ---------- Edit FSK and providers ---------- */
+
+function openEdit(id) {
+  const title = titles.find(item => item.id === id);
+  if (!title) return;
+  editTargetId = id;
+  $("editTitle").textContent = title.name;
+  $("editFsk").innerHTML = fskOptions(fskOf(title));
+  $("editProviders").innerHTML = providerToggles(title.services);
+  $("editDialog").showModal();
+}
+
 /* ---------- Events ---------- */
 
 document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
   currentView = tab.dataset.view;
+  // "Recently binged" only exists on the binged list and is its natural default.
+  if (sortBy === "added" || sortBy === "binged") sortBy = currentView === "binged" ? "binged" : "added";
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }));
 $("searchInput").addEventListener("input", render);
-["typeFilter", "genreFilter", "serviceFilter"].forEach(id => $(id).addEventListener("change", render));
-$("serviceFilter").insertAdjacentHTML("beforeend", SERVICES.map(service => `<option>${esc(service)}</option>`).join(""));
+["typeFilter", "genreFilter", "serviceFilter", "fskFilter"].forEach(id => $(id).addEventListener("change", render));
+$("sortSelect").addEventListener("change", event => { sortBy = event.target.value; render(); });
+const providerOptions = cinema => PROVIDERS.filter(provider => Boolean(provider.cinema) === cinema).map(({ name }) => `<option>${esc(name)}</option>`).join("");
+$("serviceFilter").insertAdjacentHTML("beforeend", `<optgroup label="Streaming">${providerOptions(false)}</optgroup><optgroup label="Cinema">${providerOptions(true)}</optgroup>`);
 
 $("addButton").addEventListener("click", openAddDialog);
 $("surpriseButton").addEventListener("click", surpriseMe);
@@ -444,6 +589,7 @@ $("titleGrid").addEventListener("click", event => {
   if (!target) return;
   if (target.dataset.action === "add") openAddDialog();
   if (target.dataset.watch) openRating(target.dataset.watch);
+  if (target.dataset.edit) openEdit(target.dataset.edit);
   if (target.dataset.unwatch) {
     const title = titles.find(item => item.id === target.dataset.unwatch);
     if (!title) return;
@@ -479,6 +625,7 @@ $("confirmAdd").addEventListener("click", addDetail);
 
 $("settingsButton").addEventListener("click", () => {
   ["omdbKey", "llmEndpoint", "llmKey", "llmModel"].forEach(id => { $(id).value = settings[id] || ""; });
+  $("appVersion").textContent = BUILD.startsWith("__") ? "development build" : BUILD;
   $("settingsDialog").showModal();
 });
 $("settingsForm").addEventListener("submit", event => {
@@ -515,6 +662,18 @@ $("ratingForm").addEventListener("submit", event => {
   $("ratingDialog").close();
   showStatus(`“${title.name}” moved to your binge history.`);
 });
+$("editForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const title = titles.find(item => item.id === editTargetId);
+  if (!title) return;
+  const fsk = $("editFsk").value;
+  // A rating chosen by hand is never overwritten by Wikidata; "Unknown" hands it back to the automatic lookup.
+  if (fsk !== fskOf(title)) Object.assign(title, { fsk, fskManual: fsk !== "" });
+  title.services = checkedProviders($("editProviders"));
+  persist();
+  $("editDialog").close();
+  showStatus(`“${title.name}” updated.`);
+});
 
 document.querySelectorAll("dialog").forEach(dialog => {
   dialog.querySelectorAll("[data-close]").forEach(button => button.addEventListener("click", () => dialog.close()));
@@ -522,6 +681,20 @@ document.querySelectorAll("dialog").forEach(dialog => {
   dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
 });
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator) {
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let reloading = false;
+  const reload = () => { if (!reloading) { reloading = true; location.reload(); } };
+  // A new deployment activated a new worker: reload to pick up the new app, but never in the middle of a dialog.
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) return;
+    if (document.querySelector("dialog[open]")) document.addEventListener("visibilitychange", reload, { once: true });
+    else reload();
+  });
+  navigator.serviceWorker.register("sw.js").then(registration => {
+    // Installed iOS apps resume from memory instead of reloading, so check for updates whenever the app comes back.
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") registration.update().catch(() => {}); });
+  }).catch(() => {});
+}
 render();
 refreshRatings();

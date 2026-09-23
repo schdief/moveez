@@ -26,6 +26,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 button, input, select { font: inherit; color: inherit; }
+/* iOS Safari zooms into any focused field with a font size below 16px. */
+input, select { font-size: 16px; }
 button { cursor: pointer; border: 0; background: none; padding: 0; }
 button:disabled { cursor: default; opacity: .5; }
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
@@ -83,9 +85,7 @@ a { color: inherit; }
   font-weight: 600;
 }
 .tab .icon { width: 18px; height: 18px; }
-.tab b { font-size: .72rem; font-weight: 700; min-width: 20px; padding: 1px 6px; border-radius: 10px; background: rgb(255 255 255 / 18%); }
 .tab.active { background: #fff; color: var(--brand-dark); }
-.tab.active b { background: var(--brand-soft); }
 
 .icon-button {
   display: inline-grid;
@@ -128,9 +128,9 @@ a { color: inherit; }
 .button.small { min-height: 34px; padding: 0 12px; font-size: .85rem; border-radius: 8px; }
 .button.block { width: 100%; }
 
-.toolbar { display: flex; gap: 8px; margin-bottom: 20px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
 .search {
-  flex: 1;
+  flex: 1 1 260px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -144,7 +144,11 @@ a { color: inherit; }
 .search:focus-within { border-color: var(--brand); }
 .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--ink); padding: 9px 0; }
 .search.large { min-height: 48px; font-size: 1.05rem; }
-.filters { display: flex; gap: 8px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Fixed widths: a select is otherwise as wide as its longest option (e.g. "Filmpalast Bautzen"). */
+.filters select { flex: none; width: 9rem; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+.filters #serviceFilter, .filters #fskFilter { width: 9.25rem; }
+.filters #sortSelect { width: 10.5rem; }
 .filters select, .field input, .field select, .detail-options select {
   min-height: 42px;
   padding: 0 32px 0 12px;
@@ -167,7 +171,31 @@ a { color: inherit; }
 .poster { width: 112px; aspect-ratio: 2 / 3; object-fit: cover; background: #dde7e7; flex: none; align-self: flex-start; }
 .card-body { flex: 1; min-width: 0; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
 .meta { margin: 0; color: var(--muted); font-size: .8rem; }
+.card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.card-head > div { min-width: 0; }
 .card h2 { font-size: 1.1rem; overflow-wrap: anywhere; }
+
+/* Age rating mark in the colours of the German FSK labels. */
+.fsk {
+  flex: none;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 7px;
+  line-height: 1;
+  box-shadow: inset 0 0 0 2px rgb(0 0 0 / 12%);
+}
+.fsk small { font-size: .5rem; font-weight: 800; letter-spacing: .08em; }
+.fsk b { font-size: 1.05rem; font-weight: 900; letter-spacing: -.03em; }
+.fsk-0 { background: #fff; color: #111; box-shadow: inset 0 0 0 2px #111; }
+.fsk-6 { background: #ffd900; color: #111; }
+.fsk-12 { background: #00a64f; color: #fff; }
+.fsk-16 { background: #0082c8; color: #fff; }
+.fsk-18 { background: #e30613; color: #fff; }
+.fsk-unknown { background: var(--paper); color: var(--muted); box-shadow: inset 0 0 0 2px var(--line); }
+button.fsk:hover { filter: brightness(.95); }
 .ratings { display: flex; flex-wrap: wrap; gap: 12px; font-size: .85rem; font-weight: 700; }
 .rating { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
 a.rating:hover span:last-child { text-decoration: underline; }
@@ -178,11 +206,15 @@ a.rating:hover span:last-child { text-decoration: underline; }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .chip { font-size: .72rem; padding: 2px 8px; border-radius: 20px; background: var(--brand-soft); color: var(--brand-dark); }
 .chip.outline { background: none; box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); }
+.chip.provider { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 2px; background: none; box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); }
+.chip.provider img, .toggle-chips img { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; }
 .note { font-size: .8rem; color: var(--brand-dark); font-weight: 600; }
 .popcorn { letter-spacing: -2px; }
 .card-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 4px; }
+.card-tools { display: flex; gap: 2px; }
 .card-actions .icon-button { width: 34px; height: 34px; }
-.card-actions .icon-button:hover { color: var(--danger); background: #fdecee; }
+.card-actions .icon-button:hover { color: var(--brand-dark); background: var(--brand-soft); }
+.card-actions .icon-button.danger:hover { color: var(--danger); background: #fdecee; }
 
 .empty { grid-column: 1 / -1; text-align: center; padding: 56px 20px; color: var(--muted); }
 .empty img { width: 64px; height: 64px; opacity: .9; }
@@ -267,16 +299,14 @@ dialog::backdrop { background: rgb(10 30 30 / 55%); }
 .links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .links .icon { width: 16px; height: 16px; }
 .detail-options { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 4px; }
-.detail-options h4 { margin: 14px 0 8px; font-size: .9rem; }
+.detail-options h4, .field-title { margin: 14px 0 8px; font-size: .9rem; }
 .toggle-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .toggle-chips label { position: relative; }
 .toggle-chips input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
-.toggle-chips span { display: inline-block; padding: 6px 12px; border-radius: 20px; box-shadow: inset 0 0 0 1px var(--line); font-size: .85rem; color: var(--muted); }
+.toggle-chips span { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 5px 5px; border-radius: 20px; box-shadow: inset 0 0 0 1px var(--line); font-size: .85rem; color: var(--ink); }
+.toggle-chips img { width: 22px; height: 22px; }
 .toggle-chips input:checked + span { background: var(--brand); color: #fff; box-shadow: none; }
 .toggle-chips input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 2px; }
-.cinema-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.cinema-row label { display: flex; align-items: center; gap: 8px; }
-.cinema-row input { width: 18px; height: 18px; accent-color: var(--brand); }
 
 .popcorn-rating { display: flex; gap: 6px; margin: 4px 0 8px; }
 .popcorn-rating button { font-size: 2.2rem; line-height: 1; padding: 4px; border-radius: 8px; filter: grayscale(1); opacity: .35; transition: transform .1s; }
@@ -299,10 +329,10 @@ dialog::backdrop { background: rgb(10 30 30 / 55%); }
     border-top: 1px solid var(--line);
     justify-content: space-around;
   }
-  .tab { flex: 1; max-width: 200px; flex-direction: column; justify-content: center; gap: 2px; border-radius: 0; color: var(--muted); font-size: .72rem; position: relative; }
-  .tab .icon { width: 22px; height: 22px; }
-  .tab b { position: absolute; top: 8px; left: calc(50% + 8px); background: var(--brand-soft); color: var(--brand-dark); font-size: .65rem; min-width: 18px; padding: 0 5px; }
+  .tab { flex: 1; max-width: 200px; flex-direction: column; justify-content: center; gap: 3px; border-radius: 0; color: var(--muted); font-size: .72rem; }
+  .tab .icon { width: 24px; height: 24px; }
   .tab.active { background: none; color: var(--brand); }
+  .tab.active .icon { stroke-width: 2.4; }
   #settingsButton { margin-left: auto; }
 
   .app-shell { padding: 18px 14px calc(var(--nav-height) + env(safe-area-inset-bottom) + 90px); }
@@ -317,9 +347,11 @@ dialog::backdrop { background: rgb(10 30 30 / 55%); }
     border-radius: 26px;
     box-shadow: 0 8px 24px rgb(0 100 100 / 35%);
   }
-  .toolbar { flex-direction: column; }
-  .filters { overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px; }
-  .filters select { flex: 1 0 auto; }
+  /* nowrap: a wrapping column flexbox would size its line to the widest content and overflow the screen. */
+  .toolbar { flex-direction: column; flex-wrap: nowrap; }
+  .search { flex: none; }
+  .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px; }
+  .filters::-webkit-scrollbar { display: none; }
   .title-grid { grid-template-columns: 1fr; gap: 12px; }
   .poster { width: 96px; }
   .toast { bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 84px); }

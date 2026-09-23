@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps webkit
       - run: npm run test:e2e
   deploy:
     needs: test
@@ -29,6 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Stamp build version
+        run: sed -i "s/__BUILD__/${GITHUB_SHA::7}/g" sw.js app.js index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
