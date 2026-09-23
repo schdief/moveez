@@ -10,7 +10,8 @@ const TMDB = {
   "Toy Story 5": { fsk: "0", titleDe: "Toy Story 5", flatrate: ["Disney Plus"] },
   "The Odyssey": { fsk: "12", titleDe: "Die Odyssee", flatrate: [] },
   "The Bear": { fsk: "16", titleDe: "The Bear: King of the Kitchen", flatrate: ["Disney Plus", "WOW"] },
-  Inception: { fsk: "12", titleDe: "Inception", flatrate: ["Netflix", "Amazon Prime Video", "Disney Plus", "Apple TV Plus", "Paramount Plus", "WOW", "RTL+", "Joyn"] }
+  Inception: { fsk: "12", titleDe: "Inception", flatrate: ["Netflix", "Amazon Prime Video", "Disney Plus", "Apple TV Plus", "Paramount Plus", "WOW", "RTL+", "Joyn"] },
+  Interstellar: { fsk: "12", titleDe: "Interstellar", flatrate: ["Netflix", "Amazon Prime Video"] }
 };
 const day = offset => { const date = new Date(); date.setDate(date.getDate() + offset); return date.toLocaleDateString("sv-SE"); };
 const CINEMAS = {
@@ -21,6 +22,9 @@ const CINEMAS = {
     ] },
     { name: "UCI Dresden", url: "https://www.kinoprogramm.com/kino/dresden/uci-kinowelt-elbe-park-40872", films: [
       { title: "Toy Story 5", fsk: "0", genres: ["Trickfilm"], runtime: "97 Min.", days: [day(0), day(1)], showtimes: [{ date: day(0), time: "23:50", version: "Deutsch/3D" }, { date: day(1), time: "13:50", version: "Deutsch" }], url: "https://www.kinoprogramm.com/kino/dresden/uci/toy-story-5-2" }
+    ] },
+    { name: "Filmpalast Bautzen", url: "https://www.kinoprogramm.com/kino/bautzen/filmpalast-31354", films: [
+      { title: "Toy Story 5", fsk: "0", genres: ["Trickfilm"], runtime: "97 Min.", days: [day(0)], showtimes: [{ date: day(0), time: "23:55", version: "" }], url: "https://www.kinoprogramm.com/kino/bautzen/filmpalast/toy-story-5-2" }
     ] }
   ]
 };
@@ -95,6 +99,18 @@ async function useTmdbAndCinemas(page) {
   await page.reload();
 }
 
+// Drags a card horizontally; `share` is the fraction of the card width.
+async function swipe(page, name, direction, { share = 0.5, release = true } = {}) {
+  // Measure the wrapper, which does not move (the card may still be springing back from an earlier swipe).
+  const box = await page.locator(".swipe", { has: page.getByRole("heading", { name, exact: true }) }).boundingBox();
+  const y = box.y + box.height / 2;
+  const x = box.x + box.width / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + (direction === "right" ? 1 : -1) * box.width * share, y, { steps: 10 });
+  if (release) await page.mouse.up();
+}
+
 async function addTitle(page, title) {
   const search = page.getByRole("searchbox", { name: "Search your list or add from IMDb" });
   await search.fill(title);
@@ -103,13 +119,15 @@ async function addTitle(page, title) {
   await search.fill("");
 }
 
-test("shows the list count in a bubble and adds a title with IMDb, RT audience, moveez score and FSK", async ({ page }) => {
-  await expect(page.getByRole("heading", { name: "Watchlist 0" })).toBeVisible();
-  await expect(tab(page, "Binged")).toHaveText("Binged");
+test("has no page headline and adds a title with IMDb, RT audience, moveez score and FSK", async ({ page }) => {
+  // The active tab shows where you are; there is no extra headline or counter.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(0);
+  await expect(tab(page, "Watchlist")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("banner").getByRole("button", { name: "Surprise me" })).toBeVisible();
 
   await addTitle(page, "Dune: Part Two");
 
-  await expect(page.locator("#viewCount")).toHaveText("1");
+  await expect(page.locator(".card")).toHaveCount(1);
   const card = cardOf(page, "Dune: Part Two");
   await expect(card.getByRole("img", { name: "Movie" })).toBeVisible();
   await expect(card).toContainText("8.5");
@@ -157,7 +175,10 @@ test("shows the cinemas that are playing a movie, also under its German title", 
   await addTitle(page, "Toy Story 5");
   await addTitle(page, "The Odyssey");
 
-  await expect(cardOf(page, "Toy Story 5").locator(".chip.provider")).toHaveText(["CinemaxX Dresden", "UCI Dresden", "Disney+"]);
+  await expect(cardOf(page, "Toy Story 5").locator(".chip.provider")).toHaveText(["Filmpalast Bautzen", "CinemaxX Dresden", "UCI Dresden", "Disney+"]);
+  await addTitle(page, "Interstellar");
+  // Prime Video is preferred, so it comes before Netflix.
+  await expect(cardOf(page, "Interstellar").locator(".chip.provider")).toHaveText(["Prime Video", "Netflix"]);
   const odyssey = cardOf(page, "The Odyssey").getByRole("link", { name: "CinemaxX Dresden" });
   await expect(odyssey).toHaveAttribute("href", "https://www.kinoprogramm.com/kino/dresden/cinemaxx/die-odyssee-1");
 
@@ -172,12 +193,14 @@ test("the cinema tab shows the programme of the cinemas by day with showtimes", 
   await addTitle(page, "Toy Story 5");
   await tab(page, "Cinema").tap();
 
-  await expect(page.getByRole("heading", { name: "Cinema 2" })).toBeVisible();
+  await expect(page.locator(".card")).toHaveCount(2);
   await expect(page.locator("#dayBar .day")).toHaveText(["Today", "Tomorrow"]);
   // Earliest showtime first; the watchlist title is recognised.
   await expect(page.locator(".card h2")).toHaveText(["Die Odyssee", "Toy Story 5"]);
   const toyStory = cardOf(page, "Toy Story 5");
-  await expect(toyStory.locator(".time")).toHaveText(["23:503D"]);
+  // Filmpalast Bautzen is the favourite cinema, so its showtimes come first.
+  await expect(toyStory.locator(".cinema-name")).toHaveText(["Filmpalast Bautzen", "UCI Dresden"]);
+  await expect(toyStory.locator(".time")).toHaveText(["23:55", "23:503D"]);
   await expect(toyStory).toContainText("On your watchlist");
 
   await page.locator("#dayBar").getByRole("button", { name: "Tomorrow" }).tap();
@@ -235,7 +258,24 @@ test("adds a suggested title with one tap, without a dialog", async ({ page }) =
   // The search stays, so more titles can be added; the added one moved up into the list.
   await expect(search).toHaveValue("Arrival");
   await expect(page.locator("#suggestions .lookup-result")).toHaveCount(0);
-  await expect(page.locator("#viewCount")).toHaveText("1");
+  await expect(page.locator(".card")).toHaveCount(1);
+});
+
+test("clears the search with the button on the right of the search field", async ({ page }) => {
+  await addTitle(page, "Arrival");
+  const search = page.getByRole("searchbox");
+  const clear = page.getByRole("button", { name: "Clear search" });
+  await expect(clear).toBeHidden();
+
+  await search.fill("Frozen");
+  await expect(page.locator(".card")).toHaveCount(0);
+  await expect(page.locator("#suggestions")).toBeVisible();
+  await clear.tap();
+
+  await expect(search).toHaveValue("");
+  await expect(clear).toBeHidden();
+  await expect(page.locator("#suggestions")).toBeHidden();
+  await expect(page.locator(".card h2")).toHaveText(["Arrival"]);
 });
 
 test("one search shows matching titles on the list and suggests the others from IMDb", async ({ page }) => {
@@ -254,10 +294,10 @@ test("one search shows matching titles on the list and suggests the others from 
 
   // A title on the other list is not added twice; tapping it opens that list instead.
   await search.fill("");
-  await cardOf(page, "Arrival").getByRole("button", { name: "Binged" }).click();
+  await swipe(page, "Arrival", "right");
   await search.fill("Arrival");
   await page.locator("#suggestions .lookup-result", { hasText: "In Binged" }).click();
-  await expect(page.getByRole("heading", { name: "Binged 1" })).toBeVisible();
+  await expect(tab(page, "Binged")).toHaveAttribute("aria-current", "page");
   await expect(page.locator(".card h2")).toHaveText(["Arrival"]);
 });
 
@@ -302,19 +342,54 @@ test("sorts by date added, release year and ratings", async ({ page }) => {
   await expect(order()).toHaveText(["Dune: Part Two", "Arrival", "Frozen"]);
 });
 
-test("moves a title to Binged with one tap and rates it with popcorn there", async ({ page }) => {
+test("swiping right moves a title to Binged, where it gets its popcorn rating", async ({ page }) => {
   await addTitle(page, "Spirited Away");
-  await cardOf(page, "Spirited Away").getByRole("button", { name: "Binged" }).tap();
+  await expect(cardOf(page, "Spirited Away").getByRole("button", { name: /binged|remove/i })).toHaveCount(0);
 
-  await expect(page.locator("#viewCount")).toHaveText("0");
+  // While dragging, the layer below says what will happen.
+  await swipe(page, "Spirited Away", "right", { release: false });
+  const wrapper = page.locator(".swipe", { has: page.getByRole("heading", { name: "Spirited Away" }) });
+  await expect(wrapper).toHaveClass(/going-right/);
+  await expect(wrapper).toHaveClass(/armed/);
+  await expect(wrapper.locator(".to-binged")).toBeVisible();
+  await expect(wrapper.locator(".to-binged")).toHaveText("Binged");
+  await expect(wrapper.locator(".to-remove")).toBeHidden();
+  await page.mouse.up();
+
+  await expect(page.locator(".card")).toHaveCount(0);
   await tab(page, "Binged").tap();
-  await expect(page.getByRole("heading", { name: "Binged 1" })).toBeVisible();
+  // Surprise me is only offered on the watchlist.
+  await expect(page.getByRole("button", { name: "Surprise me" })).toBeHidden();
+  await expect(page.locator(".card")).toHaveCount(1);
   const card = cardOf(page, "Spirited Away");
   await card.getByRole("button", { name: "4 popcorn bags" }).tap();
   await expect(card.locator(".popcorn-rate .selected")).toHaveCount(4);
   await page.reload();
   await tab(page, "Binged").tap();
   await expect(cardOf(page, "Spirited Away").locator(".popcorn-rate .selected")).toHaveCount(4);
+
+  // On the binged list, swiping right puts it back on the watchlist.
+  await swipe(page, "Spirited Away", "right");
+  await expect(page.locator(".card")).toHaveCount(0);
+});
+
+test("swiping left removes a title, with undo; a short swipe does nothing", async ({ page }) => {
+  await addTitle(page, "Arrival");
+
+  await swipe(page, "Arrival", "left", { share: 0.15 });
+  await expect(cardOf(page, "Arrival")).toBeVisible();
+  await expect(page.locator(".card")).toHaveCount(1);
+
+  await swipe(page, "Arrival", "left", { release: false });
+  const wrapper = page.locator(".swipe", { has: page.getByRole("heading", { name: "Arrival" }) });
+  await expect(wrapper.locator(".to-remove")).toHaveText("Remove");
+  await expect(wrapper.locator(".to-binged")).toBeHidden();
+  await page.mouse.up();
+  await expect(cardOf(page, "Arrival")).toHaveCount(0);
+
+  await page.locator("#status").getByRole("button", { name: "Undo" }).tap();
+  await expect(cardOf(page, "Arrival")).toBeVisible();
+  await expect(page.locator(".card")).toHaveCount(1);
 });
 
 test("opens settings by tap, saves them and closes without saving via X", async ({ page }) => {

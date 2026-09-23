@@ -12,8 +12,8 @@ const REFRESH_AFTER_MS = 12 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 10000;
 // Programmes are collected by scripts/cinemas.mjs in the Pages workflow and published next to the app.
 const CINEMAS = [
-  { name: "CinemaxX Dresden", logo: "icons/providers/cinemaxx.png" },
   { name: "Filmpalast Bautzen", logo: "icons/providers/filmpalast.png" },
+  { name: "CinemaxX Dresden", logo: "icons/providers/cinemaxx.png" },
   { name: "UCI Dresden", logo: "icons/providers/uci.png" }
 ];
 // TMDB provider names → short names and bundled logos (other services use the TMDB logo).
@@ -67,6 +67,9 @@ let currentView = "watchlist";
 let sortBy = "added";
 let adding = new Set();
 const expandedProviders = new Set();
+// Swipe state (see "Swipe" below); declared early because render() checks it.
+let swipe = null;
+let renderPending = false;
 let lookupController = null;
 let lookupState = { query: "", items: [], message: "" };
 let lookupTimer = null;
@@ -82,12 +85,20 @@ function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(titles));
   render();
 }
-function showStatus(message, kind = "") {
+function showStatus(message, kind = "", undo) {
   const el = $("status");
   clearTimeout(statusTimer);
   el.textContent = message;
-  el.className = `toast visible ${kind}`;
-  statusTimer = setTimeout(() => { el.className = "toast"; }, kind === "error" ? 9000 : 4500);
+  if (undo) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "toast-action";
+    button.textContent = "Undo";
+    button.addEventListener("click", () => { el.className = "toast"; undo(); }, { once: true });
+    el.append(button);
+  }
+  el.className = `toast visible ${kind}${undo ? " with-action" : ""}`;
+  statusTimer = setTimeout(() => { el.className = "toast"; }, kind === "error" ? 9000 : undo ? 6000 : 4500);
 }
 
 const posterOf = url => (url && url !== "N/A" ? url : NO_COVER);
@@ -339,13 +350,24 @@ function ratingsHtml(title) {
 }
 
 const logoImg = logo => (logo ? `<img src="${esc(logo)}" alt="" loading="lazy">` : "");
+// Favourite cinema and service come first when a title is available there.
+const PREFERRED = ["Filmpalast Bautzen", "Prime Video"];
+const preferredFirst = list => [...list].sort((a, b) => {
+  const rank = item => (PREFERRED.includes(item.name) ? PREFERRED.indexOf(item.name) : PREFERRED.length);
+  return rank(a) - rank(b);
+});
 function whereToWatch(title) {
-  const streaming = title.streaming.map(service => title.watchUrl
-    ? `<a class="chip provider" href="${esc(title.watchUrl)}" target="_blank" rel="noopener">${logoImg(service.logo)}${esc(service.name)}</a>`
-    : `<span class="chip provider">${logoImg(service.logo)}${esc(service.name)}</span>`);
-  const cinemas = title.seen ? [] : showingsOf(title).map(({ name, logo, film }) =>
-    `<a class="chip provider cinema" href="${esc(film.url)}" target="_blank" rel="noopener" title="Showtimes at ${esc(name)}">${logoImg(logo)}${esc(name)}</a>`);
-  return [...cinemas, ...streaming].join("");
+  const streaming = title.streaming.map(service => ({
+    name: service.name,
+    html: title.watchUrl
+      ? `<a class="chip provider" href="${esc(title.watchUrl)}" target="_blank" rel="noopener">${logoImg(service.logo)}${esc(service.name)}</a>`
+      : `<span class="chip provider">${logoImg(service.logo)}${esc(service.name)}</span>`
+  }));
+  const cinemas = title.seen ? [] : showingsOf(title).map(({ name, logo, film }) => ({
+    name,
+    html: `<a class="chip provider cinema" href="${esc(film.url)}" target="_blank" rel="noopener" title="Showtimes at ${esc(name)}">${logoImg(logo)}${esc(name)}</a>`
+  }));
+  return preferredFirst([...cinemas, ...streaming]).map(item => item.html).join("");
 }
 
 // Where to watch stays on one line; chips that do not fit are hidden behind "…" (tap to show all).
@@ -370,11 +392,13 @@ function card(title) {
   const genres = title.genres.map(genre => `<span class="chip">${esc(genre)}</span>`).join("");
   const providers = whereToWatch(title);
   const watched = title.seen ? `<div class="watched"><span class="note">Watched ${esc(formatDate(title.seenOn || ""))}</span>${popcornButtons(title)}</div>` : "";
-  const primary = title.seen
-    ? `<button class="button soft small" data-unwatch="${esc(title.id)}">${icon("undo")}Watch again</button>`
-    : `<button class="button primary small" data-watch="${esc(title.id)}">${icon("check")}Binged</button>`;
-  return `<article class="card">
-    <img class="poster" src="${esc(posterOf(title.poster))}" alt="" loading="lazy" data-fallback>
+  const right = title.seen ? { label: "Watch again", icon: "undo" } : { label: "Binged", icon: "check" };
+  // Swipe right: binged (or back to the watchlist), swipe left: remove. The layers below the card show which.
+  return `<div class="swipe" data-swipe="${esc(title.id)}">
+  <div class="swipe-action to-binged" aria-hidden="true">${icon(right.icon)}${right.label}</div>
+  <div class="swipe-action to-remove" aria-hidden="true">Remove${icon("trash")}</div>
+  <article class="card">
+    <img class="poster" src="${esc(posterOf(title.poster))}" alt="" loading="lazy" data-fallback draggable="false">
     <div class="card-body">
       <div class="card-head">
         <div>
@@ -387,9 +411,9 @@ function card(title) {
       ${genres ? `<div class="chips">${genres}</div>` : ""}
       ${providers ? `<div class="chips providers${expandedProviders.has(title.id) ? " expanded" : ""}">${providers}<button type="button" class="chip more" data-more="${esc(title.id)}" aria-label="Show all services" hidden>…</button></div>` : ""}
       ${watched}
-      <div class="card-actions">${primary}<button class="icon-button danger" data-remove="${esc(title.id)}" aria-label="Remove ${esc(title.name)}" title="Remove">${icon("trash")}</button></div>
     </div>
-  </article>`;
+  </article>
+  </div>`;
 }
 
 function emptyState(filtered) {
@@ -444,6 +468,9 @@ function fillSelect(select, allLabel, groups) {
 }
 
 function render() {
+  // Background updates must not replace the card under the finger; they are drawn after the swipe.
+  if (swipe) { renderPending = true; return; }
+  renderPending = false;
   const cinemaView = currentView === "cinema";
   document.querySelectorAll(".tab").forEach(tab => {
     const active = tab.dataset.view === currentView;
@@ -456,6 +483,7 @@ function render() {
   const placeholder = cinemaView ? "Search the cinema programme" : "Search your list or add from IMDb";
   $("searchInput").placeholder = placeholder;
   $("searchInput").setAttribute("aria-label", placeholder);
+  $("clearSearch").hidden = !$("searchInput").value;
   if (cinemaView) {
     renderCinema();
     renderSuggestions();
@@ -472,8 +500,6 @@ function render() {
   $("sortSelect").value = sortBy;
 
   const visible = visibleTitles();
-  $("viewName").textContent = currentView === "binged" ? "Binged" : "Watchlist";
-  $("viewCount").textContent = inView.length;
   $("titleGrid").innerHTML = visible.length ? visible.map(card).join("") : emptyState(inView.length > 0);
   fitProviderRows();
   renderSuggestions();
@@ -562,8 +588,6 @@ function renderCinema() {
     // Earliest showtime of the day first.
     .sort(([, a], [, b]) => a[0].time.localeCompare(b[0].time));
 
-  $("viewName").textContent = "Cinema";
-  $("viewCount").textContent = films.length;
   if (!days.length) {
     $("titleGrid").innerHTML = `<div class="empty"><img src="${ASSETS}logo.png" alt=""><h2>No cinema programme</h2><p>The programme of your cinemas could not be loaded right now.</p></div>`;
     return;
@@ -639,6 +663,7 @@ async function addFromImdb(imdbID) {
     currentView = "watchlist";
     persist();
     showStatus(`“${entry.name}” added to your watchlist.`);
+    showSwipeTip();
     refresh([entry]);
   } catch (error) {
     showStatus(`The title could not be added: ${error.message}`, "error");
@@ -740,11 +765,19 @@ $("dayBar").addEventListener("click", event => {
 });
 
 $("surpriseButton").addEventListener("click", surpriseMe);
+$("clearSearch").addEventListener("click", () => {
+  $("searchInput").value = "";
+  clearTimeout(lookupTimer);
+  lookupController?.abort();
+  lookupState = { query: "", items: [], message: "" };
+  render();
+  $("searchInput").focus();
+});
 
 $("titleGrid").addEventListener("click", event => {
   const target = event.target.closest("button");
   if (!target) return;
-  const title = titles.find(item => item.id === (target.dataset.watch || target.dataset.unwatch || target.dataset.rate || target.dataset.remove));
+  const title = titles.find(item => item.id === target.dataset.rate);
   if (target.dataset.action === "search") $("searchInput").focus();
   if (target.dataset.more) {
     expandedProviders.add(target.dataset.more);
@@ -759,27 +792,96 @@ $("titleGrid").addEventListener("click", event => {
     lookup(target.dataset.find);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
-  if (!title) return;
-  if (target.dataset.watch) {
-    Object.assign(title, { seen: true, seenOn: today(), userRating: 0 });
-    persist();
-    showStatus(`“${title.name}” moved to Binged – rate it there with popcorn.`);
-  }
-  if (target.dataset.unwatch) {
-    Object.assign(title, { seen: false, userRating: 0, seenOn: undefined });
-    persist();
-    showStatus(`“${title.name}” is back on your watchlist.`);
-  }
-  if (target.dataset.rate) {
+  if (title) {
     const value = Number(target.dataset.value);
     title.userRating = value === title.userRating ? 0 : value;
     persist();
   }
-  if (target.dataset.remove && confirm(`Remove “${title.name}”?`)) {
+});
+
+/* ---------- Swipe: right = binged / watch again, left = remove ---------- */
+
+const SWIPE_COMMIT = 0.35;
+let swallowClick = false;
+
+// Swiping is invisible, so explain it once.
+function showSwipeTip() {
+  if (settings.swipeTipShown || !titles.length) return;
+  settings.swipeTipShown = true;
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  setTimeout(() => showStatus("Tip: swipe a title right once you have binged it, left to remove it."), 2500);
+}
+
+function swipeAction(id, direction) {
+  const title = titles.find(item => item.id === id);
+  if (!title) return;
+  if (direction === "left") {
+    const index = titles.indexOf(title);
     titles = titles.filter(item => item !== title);
     persist();
+    showStatus(`“${title.name}” removed.`, "", () => { titles.splice(Math.min(index, titles.length), 0, title); persist(); });
+    return;
   }
+  const before = { seen: title.seen, seenOn: title.seenOn, userRating: title.userRating };
+  if (title.seen) Object.assign(title, { seen: false, seenOn: undefined, userRating: 0 });
+  else Object.assign(title, { seen: true, seenOn: today(), userRating: 0 });
+  persist();
+  showStatus(title.seen ? `“${title.name}” moved to Binged – rate it there.` : `“${title.name}” is back on your watchlist.`, "", () => { Object.assign(title, before); persist(); });
+}
+
+$("titleGrid").addEventListener("pointerdown", event => {
+  const wrapper = event.target.closest(".swipe");
+  if (!wrapper || event.button > 0) return;
+  swipe = { wrapper, card: wrapper.querySelector(".card"), id: wrapper.dataset.swipe, pointerId: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, active: false };
 });
+$("titleGrid").addEventListener("pointermove", event => {
+  if (!swipe || event.pointerId !== swipe.pointerId) return;
+  const dx = event.clientX - swipe.x;
+  const dy = event.clientY - swipe.y;
+  if (!swipe.active) {
+    // Mostly vertical: the user scrolls the list.
+    if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { finishGesture(); return; }
+    if (Math.abs(dx) < 10) return;
+    swipe.active = true;
+    swipe.wrapper.setPointerCapture?.(event.pointerId);
+    swipe.wrapper.classList.add("dragging");
+  }
+  swipe.dx = dx;
+  swipe.card.style.transform = `translateX(${dx}px)`;
+  swipe.wrapper.classList.toggle("going-right", dx > 0);
+  swipe.wrapper.classList.toggle("going-left", dx < 0);
+  swipe.wrapper.classList.toggle("armed", Math.abs(dx) > swipe.wrapper.offsetWidth * SWIPE_COMMIT);
+});
+function finishGesture() {
+  swipe = null;
+  if (renderPending) render();
+}
+
+function endSwipe(event) {
+  if (!swipe || event.pointerId !== swipe.pointerId) return;
+  const { wrapper, card, dx, active, id } = swipe;
+  if (!active) { finishGesture(); return; }
+  // The finger lifted after a drag: this must not also count as a tap on a link or button in the card.
+  swallowClick = true;
+  setTimeout(() => { swallowClick = false; }, 400);
+  wrapper.classList.remove("dragging");
+  const width = wrapper.offsetWidth;
+  if (event.type === "pointerup" && Math.abs(dx) > width * SWIPE_COMMIT) {
+    card.style.transform = `translateX(${dx > 0 ? width : -width}px)`;
+    setTimeout(() => { finishGesture(); swipeAction(id, dx > 0 ? "right" : "left"); }, 180);
+  } else {
+    card.style.transform = "";
+    wrapper.classList.remove("going-right", "going-left", "armed");
+    finishGesture();
+  }
+}
+$("titleGrid").addEventListener("pointerup", endSwipe);
+$("titleGrid").addEventListener("pointercancel", endSwipe);
+// Dragging a link or poster natively would swallow the rest of the gesture.
+$("titleGrid").addEventListener("dragstart", event => { if (event.target.closest?.(".swipe")) event.preventDefault(); });
+$("titleGrid").addEventListener("click", event => {
+  if (swallowClick) { event.preventDefault(); event.stopPropagation(); swallowClick = false; }
+}, true);
 
 // Posters from OMDb/IMDb sometimes 404; swap in the placeholder once.
 document.addEventListener("error", event => {
@@ -834,5 +936,6 @@ if ("serviceWorker" in navigator) {
   }).catch(() => {});
 }
 render();
+showSwipeTip();
 loadCinemas();
 refreshOnStart();

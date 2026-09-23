@@ -50,24 +50,21 @@
             <svg class="icon"><use href="#i-ticket"/></svg><span>Cinema</span>
           </button>
         </nav>
-        <button class="icon-button on-brand" id="settingsButton" aria-label="Open settings">
-          <svg class="icon"><use href="#i-sliders"/></svg>
-        </button>
+        <div class="topbar-actions">
+          <button class="button on-brand" id="surpriseButton"><svg class="icon"><use href="#i-sparkle"/></svg>Surprise me</button>
+          <button class="icon-button on-brand" id="settingsButton" aria-label="Open settings">
+            <svg class="icon"><use href="#i-sliders"/></svg>
+          </button>
+        </div>
       </div>
     </header>
 
     <main class="app-shell">
-      <div class="page-head">
-        <h1 id="viewTitle"><span id="viewName">Watchlist</span> <span class="count" id="viewCount">0</span></h1>
-        <div class="page-actions">
-          <button class="button ghost" id="surpriseButton"><svg class="icon"><use href="#i-sparkle"/></svg>Surprise me</button>
-        </div>
-      </div>
-
       <div class="toolbar" role="search">
         <label class="search">
           <svg class="icon"><use href="#i-search"/></svg>
           <input id="searchInput" type="search" placeholder="Search your list or add from IMDb" aria-label="Search your list or add from IMDb" autocomplete="off" enterkeyhint="search">
+          <button class="search-clear" id="clearSearch" type="button" aria-label="Clear search" hidden><svg class="icon"><use href="#i-x"/></svg></button>
         </label>
         <div class="filters">
           <select id="typeFilter" aria-label="Filter by type">

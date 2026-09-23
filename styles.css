@@ -99,27 +99,13 @@ a { color: inherit; }
 .icon-button:hover { background: rgb(0 0 0 / 5%); }
 .icon-button.on-brand { color: #fff; }
 .icon-button.on-brand:hover { background: rgb(255 255 255 / 15%); }
+.topbar-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.tabs + .topbar-actions { margin-left: 0; }
+.button.on-brand { min-height: 36px; padding: 0 12px; background: rgb(255 255 255 / 16%); color: #fff; font-size: .9rem; }
+.button.on-brand:hover:not(:disabled) { background: rgb(255 255 255 / 24%); }
 
 /* ---------- Page ---------- */
-.app-shell { max-width: 1100px; margin: auto; padding: 24px 16px 48px; }
-.page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-.page-head h1 { font-size: 1.75rem; display: flex; align-items: center; gap: 10px; }
-.count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 30px;
-  height: 30px;
-  padding: 0 9px;
-  border-radius: 15px;
-  background: var(--brand);
-  color: #fff;
-  font-size: .95rem;
-  font-weight: 800;
-  letter-spacing: 0;
-  font-variant-numeric: tabular-nums;
-  box-shadow: 0 2px 8px rgb(0 128 128 / 30%);
-}
-.page-actions { display: flex; gap: 8px; }
+.app-shell { max-width: 1100px; margin: auto; padding: 16px 16px 48px; }
 
 .button {
   display: inline-flex;
@@ -158,6 +144,10 @@ a { color: inherit; }
 }
 .search:focus-within { border-color: var(--brand); }
 .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--ink); padding: 9px 0; }
+/* Own clear button instead of the native one, which iOS only shows while typing. */
+.search input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+.search-clear { display: grid; place-items: center; width: 30px; height: 30px; margin-right: -6px; border-radius: 50%; background: var(--paper); color: var(--muted); flex: none; }
+.search-clear .icon { width: 16px; height: 16px; stroke-width: 2.6; }
 .search.large { min-height: 48px; font-size: 1.05rem; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; }
 /* Fixed widths: a select is otherwise as wide as its longest option (e.g. "Filmpalast Bautzen"). */
@@ -183,6 +173,20 @@ a { color: inherit; }
   box-shadow: var(--shadow);
   overflow: hidden;
 }
+
+/* Swipe: the card slides over a coloured layer that says what letting go will do. */
+.swipe { position: relative; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); background: var(--paper); }
+.swipe .card { position: relative; z-index: 1; height: 100%; box-shadow: none; touch-action: pan-y; transition: transform .18s ease-out; }
+.swipe.dragging .card { transition: none; user-select: none; -webkit-user-select: none; }
+.swipe a, .swipe img { -webkit-user-drag: none; -webkit-touch-callout: none; }
+.swipe-action { position: absolute; inset: 0; display: none; align-items: center; gap: 10px; padding: 0 24px; color: #fff; font-size: 1.05rem; font-weight: 800; }
+.swipe-action .icon { width: 28px; height: 28px; stroke-width: 2.4; transition: transform .15s; }
+.swipe-action.to-binged { background: #7fb8b8; justify-content: flex-start; }
+.swipe-action.to-remove { background: #e9a0a9; justify-content: flex-end; }
+.swipe.going-right .to-binged, .swipe.going-left .to-remove { display: flex; }
+.swipe.armed .to-binged { background: var(--brand); }
+.swipe.armed .to-remove { background: var(--danger); }
+.swipe.armed .swipe-action .icon { transform: scale(1.25); }
 .poster { width: 112px; aspect-ratio: 2 / 3; object-fit: cover; background: #dde7e7; flex: none; align-self: flex-start; }
 .card-body { flex: 1; min-width: 0; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
 .meta { margin: 0; color: var(--muted); font-size: .8rem; display: flex; align-items: center; gap: 6px; }
@@ -284,6 +288,8 @@ a.rating:hover span:last-child { text-decoration: underline; }
   transition: opacity .2s, transform .2s;
 }
 .toast.visible { opacity: 1; transform: translate(-50%, 0); }
+.toast.with-action { display: flex; align-items: center; gap: 14px; pointer-events: auto; }
+.toast-action { flex: none; color: #7fe3e3; font-weight: 800; padding: 4px 0; }
 .toast.error { background: var(--danger); }
 
 /* ---------- Dialogs ---------- */
@@ -354,10 +360,10 @@ dialog::backdrop { background: rgb(10 30 30 / 55%); }
   .tab .icon { width: 24px; height: 24px; }
   .tab.active { background: none; color: var(--brand); }
   .tab.active .icon { stroke-width: 2.4; }
-  #settingsButton { margin-left: auto; }
+  /* The tabs sit at the bottom on phones, so the actions need their own push to the right. */
+  .tabs + .topbar-actions { margin-left: auto; }
 
-  .app-shell { padding: 18px 14px calc(var(--nav-height) + env(safe-area-inset-bottom) + 32px); }
-  .page-head h1 { font-size: 1.5rem; }
+  .app-shell { padding: 14px 14px calc(var(--nav-height) + env(safe-area-inset-bottom) + 32px); }
   /* nowrap: a wrapping column flexbox would size its line to the widest content and overflow the screen. */
   .toolbar { flex-direction: column; flex-wrap: nowrap; }
   .search { flex: none; }
