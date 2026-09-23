@@ -65,8 +65,8 @@ let cinemaData = null;
 let cinemaDay = null;
 let currentView = "watchlist";
 let sortBy = "added";
-let detail = null;
-let detailToken = 0;
+let adding = new Set();
+const expandedProviders = new Set();
 let lookupController = null;
 let lookupState = { query: "", items: [], message: "" };
 let lookupTimer = null;
@@ -348,6 +348,19 @@ function whereToWatch(title) {
   return [...cinemas, ...streaming].join("");
 }
 
+// Where to watch stays on one line; chips that do not fit are hidden behind "…" (tap to show all).
+function fitProviderRows() {
+  document.querySelectorAll(".chips.providers:not(.expanded)").forEach(row => {
+    const chips = [...row.querySelectorAll(".chip.provider")];
+    const more = row.querySelector(".more");
+    chips.forEach(chip => { chip.hidden = false; });
+    more.hidden = true;
+    if (row.scrollWidth <= row.clientWidth) return;
+    more.hidden = false;
+    for (let index = chips.length - 1; index > 0 && row.scrollWidth > row.clientWidth; index--) chips[index].hidden = true;
+  });
+}
+
 function popcornButtons(title) {
   return `<div class="popcorn-rate" role="group" aria-label="Your rating">${[1, 2, 3, 4, 5].map(value =>
     `<button type="button" class="${value <= (title.userRating || 0) ? "selected" : ""}" data-rate="${esc(title.id)}" data-value="${value}" aria-pressed="${value === title.userRating}" aria-label="${value} popcorn bag${value > 1 ? "s" : ""}">🍿</button>`).join("")}</div>`;
@@ -372,7 +385,7 @@ function card(title) {
       </div>
       ${ratingsHtml(title)}
       ${genres ? `<div class="chips">${genres}</div>` : ""}
-      ${providers ? `<div class="chips">${providers}</div>` : ""}
+      ${providers ? `<div class="chips providers${expandedProviders.has(title.id) ? " expanded" : ""}">${providers}<button type="button" class="chip more" data-more="${esc(title.id)}" aria-label="Show all services" hidden>…</button></div>` : ""}
       ${watched}
       <div class="card-actions">${primary}<button class="icon-button danger" data-remove="${esc(title.id)}" aria-label="Remove ${esc(title.name)}" title="Remove">${icon("trash")}</button></div>
     </div>
@@ -462,6 +475,7 @@ function render() {
   $("viewName").textContent = currentView === "binged" ? "Binged" : "Watchlist";
   $("viewCount").textContent = inView.length;
   $("titleGrid").innerHTML = visible.length ? visible.map(card).join("") : emptyState(inView.length > 0);
+  fitProviderRows();
   renderSuggestions();
 }
 
@@ -568,10 +582,11 @@ function setLookupMessage(message, kind = "") {
 
 function resultRow(item) {
   const onList = titles.find(title => title.imdbID === item.imdbID);
+  const busy = adding.has(item.imdbID);
   const trailing = onList
     ? `<span class="pill">${onList.seen ? "In Binged" : "On your watchlist"}</span>`
-    : `<span class="add-pill">${icon("plus")}Add</span>`;
-  return `<li><button type="button" class="lookup-result" data-imdb="${esc(item.imdbID)}"${onList ? ` data-view="${onList.seen ? "binged" : "watchlist"}"` : ""}>
+    : `<span class="add-pill">${busy ? "Adding…" : `${icon("plus")}Add`}</span>`;
+  return `<li><button type="button" class="lookup-result" data-imdb="${esc(item.imdbID)}"${onList ? ` data-view="${onList.seen ? "binged" : "watchlist"}"` : ""}${busy ? " disabled" : ""}>
     <img src="${esc(posterOf(item.Poster))}" alt="" loading="lazy" data-fallback>
     <span class="result-text"><strong>${esc(item.Title)}</strong><small>${esc(item.Year)} · ${formatLabel(item.Type)}</small></span>
     ${trailing}
@@ -611,61 +626,26 @@ async function lookup(query) {
   renderSuggestions();
 }
 
-function detailHtml(title) {
-  const meta = [formatLabel(title.type), title.year, title.runtime].filter(Boolean).map(esc).join(" · ");
-  return `<div class="detail">
-      <img src="${esc(posterOf(title.poster))}" alt="" data-fallback>
-      <div>
-        <p class="meta">${meta}</p>
-        <h3>${esc(title.name)}</h3>
-        ${ratingsHtml(title)}
-        ${title.genres.length ? `<div class="chips">${title.genres.map(genre => `<span class="chip">${esc(genre)}</span>`).join("")}</div>` : ""}
-      </div>
-    </div>
-    ${title.plot ? `<p class="plot">${esc(title.plot)}</p>` : ""}
-    <div class="links">
-      <a class="button ghost small" href="${esc(imdbUrl(title))}" target="_blank" rel="noopener">IMDb ${icon("external")}</a>
-      <a class="button ghost small" href="${esc(rtUrl(title))}" target="_blank" rel="noopener">Rotten Tomatoes ${icon("external")}</a>
-    </div>`;
-}
-
-async function openDetail(imdbID) {
-  const token = ++detailToken;
-  detail = null;
-  $("detailFoot").hidden = true;
-  $("titleDialogHeading").textContent = "Details";
-  $("detailPane").innerHTML = `<p class="hint">Loading…</p>`;
-  if (!$("titleDialog").open) $("titleDialog").showModal();
+// One tap adds the title; ratings, FSK and where to watch follow in the background.
+async function addFromImdb(imdbID) {
+  if (isOnList(imdbID) || adding.has(imdbID)) return;
+  adding.add(imdbID);
+  renderSuggestions();
   try {
-    const data = await omdb({ i: imdbID, plot: "short" });
-    if (token !== detailToken) return;
-    const base = toTitle(data);
-    const rt = await fetchRtAudience(base).catch(() => ({ rtAudience: "", rtUrl: "" }));
-    if (token !== detailToken) return;
-    detail = { ...base, ...rt, ratingsUpdatedAt: new Date().toISOString() };
-    const onList = isOnList(detail.imdbID);
-    $("titleDialogHeading").textContent = detail.name;
-    $("detailPane").innerHTML = detailHtml(detail);
-    $("confirmAdd").disabled = onList;
-    $("confirmAdd").textContent = onList ? "Already on your list" : "Add to watchlist";
-    $("detailFoot").hidden = false;
+    const base = toTitle(await omdb({ i: imdbID, plot: "short" }));
+    if (isOnList(base.imdbID)) return;
+    const entry = { id: newId(), ...base, fsk: "", streaming: [], seen: false, createdAt: new Date().toISOString() };
+    titles.unshift(entry);
+    currentView = "watchlist";
+    persist();
+    showStatus(`“${entry.name}” added to your watchlist.`);
+    refresh([entry]);
   } catch (error) {
-    if (token !== detailToken) return;
-    $("detailPane").innerHTML = `<p class="hint error">The details could not be loaded. ${esc(error.message)}</p>`;
+    showStatus(`The title could not be added: ${error.message}`, "error");
+  } finally {
+    adding.delete(imdbID);
+    renderSuggestions();
   }
-}
-
-function addDetail() {
-  if (!detail || isOnList(detail.imdbID)) return;
-  const entry = { id: newId(), ...detail, fsk: "", streaming: [], seen: false, createdAt: new Date().toISOString() };
-  titles.unshift(entry);
-  currentView = "watchlist";
-  $("searchInput").value = "";
-  persist();
-  $("titleDialog").close();
-  showStatus(`“${entry.name}” added to your watchlist.`);
-  // FSK and where to watch are looked up in the background.
-  refresh([entry], { ratings: () => false });
 }
 
 /* ---------- Surprise me ---------- */
@@ -736,6 +716,7 @@ function saveSettings() {
 /* ---------- Events ---------- */
 
 // Show unexpected errors instead of silently doing nothing, so problems on a phone can be reported.
+window.addEventListener("resize", fitProviderRows);
 window.addEventListener("error", event => showStatus(`Something went wrong: ${event.message}`, "error"));
 window.addEventListener("unhandledrejection", event => showStatus(`Something went wrong: ${event.reason?.message || event.reason}`, "error"));
 
@@ -765,6 +746,11 @@ $("titleGrid").addEventListener("click", event => {
   if (!target) return;
   const title = titles.find(item => item.id === (target.dataset.watch || target.dataset.unwatch || target.dataset.rate || target.dataset.remove));
   if (target.dataset.action === "search") $("searchInput").focus();
+  if (target.dataset.more) {
+    expandedProviders.add(target.dataset.more);
+    render();
+    return;
+  }
   // Cinema tab: look the film up on IMDb through the normal search.
   if (target.dataset.find) {
     currentView = "watchlist";
@@ -809,10 +795,9 @@ $("lookupResults").addEventListener("click", event => {
     currentView = result.dataset.view;
     render();
   } else {
-    openDetail(result.dataset.imdb);
+    addFromImdb(result.dataset.imdb);
   }
 });
-$("confirmAdd").addEventListener("click", addDetail);
 
 $("settingsButton").addEventListener("click", openSettings);
 $("saveSettings").addEventListener("click", saveSettings);

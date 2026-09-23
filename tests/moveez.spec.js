@@ -9,7 +9,8 @@ const WIKIDATA_FSK = { Frozen: "Q20644794", Arrival: "Q20644796", "Dune: Part Tw
 const TMDB = {
   "Toy Story 5": { fsk: "0", titleDe: "Toy Story 5", flatrate: ["Disney Plus"] },
   "The Odyssey": { fsk: "12", titleDe: "Die Odyssee", flatrate: [] },
-  "The Bear": { fsk: "16", titleDe: "The Bear: King of the Kitchen", flatrate: ["Disney Plus", "WOW"] }
+  "The Bear": { fsk: "16", titleDe: "The Bear: King of the Kitchen", flatrate: ["Disney Plus", "WOW"] },
+  Inception: { fsk: "12", titleDe: "Inception", flatrate: ["Netflix", "Amazon Prime Video", "Disney Plus", "Apple TV Plus", "Paramount Plus", "WOW", "RTL+", "Joyn"] }
 };
 const day = offset => { const date = new Date(); date.setDate(date.getDate() + offset); return date.toLocaleDateString("sv-SE"); };
 const CINEMAS = {
@@ -95,12 +96,11 @@ async function useTmdbAndCinemas(page) {
 }
 
 async function addTitle(page, title) {
-  await page.getByRole("searchbox", { name: "Search your list or add from IMDb" }).fill(title);
-  await page.locator("#suggestions .lookup-result", { hasText: title }).click();
-  const dialog = page.locator("#titleDialog");
-  await dialog.getByRole("button", { name: "Add to watchlist" }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole("searchbox")).toHaveValue("");
+  const search = page.getByRole("searchbox", { name: "Search your list or add from IMDb" });
+  await search.fill(title);
+  await page.locator("#suggestions .lookup-result", { hasText: title }).tap();
+  await expect(cardOf(page, title)).toBeVisible();
+  await search.fill("");
 }
 
 test("shows the list count in a bubble and adds a title with IMDb, RT audience, moveez score and FSK", async ({ page }) => {
@@ -132,6 +132,24 @@ test("looks up FSK and streaming services automatically after adding a title", a
   await expect(services).toHaveText(["Disney+", "WOW"]);
   await expect(services.first().locator("img")).toHaveAttribute("src", "icons/providers/disney-plus.png");
   await expect(services.nth(1).locator("img")).toHaveAttribute("src", "https://image.tmdb.org/t/p/w92/WOW.png");
+});
+
+test("keeps many streaming services on one line behind an expandable …", async ({ page }) => {
+  await useTmdbAndCinemas(page);
+  await addTitle(page, "Inception");
+  const card = cardOf(page, "Inception");
+  const row = card.locator(".chips.providers");
+  const more = row.getByRole("button", { name: "Show all services" });
+
+  await expect(more).toBeVisible();
+  const lineHeight = (await row.boundingBox()).height;
+  expect(lineHeight).toBeLessThan(30);
+  expect(await row.locator(".chip.provider:visible").count()).toBeLessThan(8);
+
+  await more.tap();
+  await expect(row.locator(".chip.provider:visible")).toHaveCount(8);
+  await expect(more).toBeHidden();
+  expect((await row.boundingBox()).height).toBeGreaterThan(lineHeight);
 });
 
 test("shows the cinemas that are playing a movie, also under its German title", async ({ page }) => {
@@ -207,13 +225,17 @@ test("adds a title even while the FSK lookup hangs", async ({ page }) => {
   await expect(cardOf(page, "Arrival").getByRole("img", { name: "FSK unknown" })).toBeVisible();
 });
 
-test("closes the details with the X button", async ({ page }) => {
-  await page.getByRole("searchbox").fill("Arrival");
-  await page.locator("#suggestions .lookup-result").click();
-  const dialog = page.locator("#titleDialog");
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Close" }).click();
-  await expect(dialog).toBeHidden();
+test("adds a suggested title with one tap, without a dialog", async ({ page }) => {
+  const search = page.getByRole("searchbox");
+  await search.fill("Arrival");
+  await page.locator("#suggestions .lookup-result", { hasText: "Arrival" }).getByText("Add").tap();
+
+  await expect(cardOf(page, "Arrival")).toBeVisible();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  // The search stays, so more titles can be added; the added one moved up into the list.
+  await expect(search).toHaveValue("Arrival");
+  await expect(page.locator("#suggestions .lookup-result")).toHaveCount(0);
+  await expect(page.locator("#viewCount")).toHaveText("1");
 });
 
 test("one search shows matching titles on the list and suggests the others from IMDb", async ({ page }) => {

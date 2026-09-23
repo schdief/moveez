@@ -101,20 +101,7 @@
 
     <div id="status" class="toast" role="status" aria-live="polite"></div>
 
-    <dialog id="titleDialog" class="sheet tall" aria-labelledby="titleDialogHeading">
-      <div class="dialog-head">
-        <h2 id="titleDialogHeading">Details</h2>
-        <button class="icon-button" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
-      </div>
-      <div class="dialog-body">
-        <div id="detailPane"></div>
-      </div>
-      <div class="dialog-foot" id="detailFoot" hidden>
-        <button class="button primary block" id="confirmAdd" type="button">Add to watchlist</button>
-      </div>
-    </dialog>
-
-    <!-- Built exactly like the add dialog (full-height sheet, no <form>), which works on the iPhone. -->
+    <!-- Full-height sheet without <form>: dialogs with forms did not open on the iPhone. -->
     <dialog id="settingsDialog" class="sheet tall" aria-labelledby="settingsHeading">
       <div class="dialog-head">
         <h2 id="settingsHeading">Settings</h2>
