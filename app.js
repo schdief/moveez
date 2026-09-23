@@ -3,20 +3,26 @@ const BUILD = "__BUILD__";
 const SETTINGS_KEY = "moveez-settings-v2";
 // Public key that the original Moveez GUI shipped with; users can set their own in Settings.
 const DEFAULT_OMDB_KEY = "b50af808";
+// Injected by the Pages workflow from the TMDB_API_KEY repository secret (TMDB answers browser requests, JustWatch does not).
+const TMDB_KEY = "__TMDB_KEY__";
 // Rotten Tomatoes has no official API. Its own website searches this public, search-only Algolia index,
 // which is the only browser-reachable source of the audience score.
 const RT_SEARCH = "https://79frdp12pn-dsn.algolia.net/1/indexes/content_rt/query?x-algolia-application-id=79FRDP12PN&x-algolia-api-key=175588f6e5f8319b27702e4cc4013561";
 const REFRESH_AFTER_MS = 12 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 10000;
-const PROVIDERS = [
-  { name: "Netflix", logo: "netflix" },
-  { name: "Amazon Prime", logo: "prime-video" },
-  { name: "Disney+", logo: "disney-plus" },
-  { name: "Apple TV+", logo: "apple-tv" },
-  { name: "Paramount+", logo: "paramount-plus" },
-  { name: "CinemaxX Dresden", logo: "cinemaxx", cinema: true },
-  { name: "Filmpalast Bautzen", logo: "filmpalast", cinema: true },
-  { name: "UCI Dresden", logo: "uci", cinema: true }
+// Programmes are collected by scripts/cinemas.mjs in the Pages workflow and published next to the app.
+const CINEMAS = [
+  { name: "CinemaxX Dresden", logo: "icons/providers/cinemaxx.png" },
+  { name: "Filmpalast Bautzen", logo: "icons/providers/filmpalast.png" },
+  { name: "UCI Dresden", logo: "icons/providers/uci.png" }
+];
+// TMDB provider names → short names and bundled logos (other services use the TMDB logo).
+const STREAMING = [
+  { match: /^netflix/i, name: "Netflix", logo: "icons/providers/netflix.png" },
+  { match: /^amazon prime/i, name: "Prime Video", logo: "icons/providers/prime-video.png" },
+  { match: /^disney/i, name: "Disney+", logo: "icons/providers/disney-plus.png" },
+  { match: /^apple tv/i, name: "Apple TV+", logo: "icons/providers/apple-tv.png" },
+  { match: /^paramount/i, name: "Paramount+", logo: "icons/providers/paramount-plus.png" }
 ];
 const FSK_LEVELS = ["0", "6", "12", "16", "18"];
 // Wikidata items for the FSK age ratings (property P1981).
@@ -31,26 +37,34 @@ function load(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 }
 
+function streamingService(rawName, logoPath = "") {
+  const known = STREAMING.find(service => service.match.test(rawName));
+  if (known) return { name: known.name, logo: known.logo };
+  return { name: rawName.replace(/ with ads$/i, ""), logo: logoPath ? `https://image.tmdb.org/t/p/w92${logoPath}` : "" };
+}
+const uniqueByName = list => list.filter((item, index) => list.findIndex(other => other.name === item.name) === index);
+
 let titles = load(STORAGE_KEY, []);
 titles.forEach(title => {
   // Earlier versions stored the RT critics score (Tomatometer) as rtRating; Moveez uses the audience score.
   delete title.rtRating;
+  delete title.fskManual;
   title.genres ||= [];
-  title.services ||= [];
-  // Cinemas used to be a separate "now in cinema" flag; they are regular providers now.
-  if (title.cinemaNow && title.cinema && !title.services.includes(title.cinema)) title.services.push(title.cinema);
+  // Services used to be picked by hand; they now come from TMDB. Cinemas come from the live programmes.
+  if (!Array.isArray(title.streaming)) {
+    const cinemas = CINEMAS.map(cinema => cinema.name);
+    title.streaming = uniqueByName((title.services || []).filter(name => !cinemas.includes(name)).map(name => streamingService(name)));
+  }
+  delete title.services;
   delete title.cinemaNow;
   delete title.cinema;
   title.fsk ??= "";
 });
 let settings = load(SETTINGS_KEY, {});
+let cinemaData = null;
 let currentView = "watchlist";
 let sortBy = "added";
-let editTargetId = null;
-let selectedRating = 0;
-let ratingTargetId = null;
 let detail = null;
-let detailFskLookup = null;
 let detailToken = 0;
 let lookupController = null;
 let lookupTimer = null;
@@ -71,23 +85,25 @@ function showStatus(message, kind = "") {
   clearTimeout(statusTimer);
   el.textContent = message;
   el.className = `toast visible ${kind}`;
-  statusTimer = setTimeout(() => { el.className = "toast"; }, 4500);
+  statusTimer = setTimeout(() => { el.className = "toast"; }, kind === "error" ? 9000 : 4500);
 }
 
 const posterOf = url => (url && url !== "N/A" ? url : NO_COVER);
 const formatLabel = type => (type === "series" ? "TV series" : "Movie");
+const typeIcon = type => `<svg class="icon type-icon" role="img" aria-label="${formatLabel(type)}"><title>${formatLabel(type)}</title><use href="#i-${type === "series" ? "tv" : "film"}"/></svg>`;
 const imdbUrl = title => (title.imdbID ? `https://www.imdb.com/title/${encodeURIComponent(title.imdbID)}/` : `https://www.imdb.com/find/?q=${encodeURIComponent(title.name)}`);
 const rtUrl = title => title.rtUrl || `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title.name)}`;
 const isOnList = imdbID => Boolean(imdbID) && titles.some(title => title.imdbID === imdbID);
 const today = () => new Date().toLocaleDateString("sv-SE");
+const tmdbKey = () => settings.tmdbKey || (TMDB_KEY.startsWith("__") ? "" : TMDB_KEY);
 function formatDate(value) {
   const date = new Date(value.length === 10 ? `${value}T00:00` : value);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
-/* ---------- OMDb ---------- */
+/* ---------- Requests ---------- */
 
-// A stalled request must never leave the app waiting forever (WebKit sometimes never answers Wikidata requests).
+// A stalled request must never leave the app waiting forever (Wikidata sometimes takes very long to answer).
 async function fetchJson(url, { signal, ...options } = {}) {
   const controller = new AbortController();
   let timedOut = false;
@@ -106,6 +122,8 @@ async function fetchJson(url, { signal, ...options } = {}) {
   }
 }
 
+/* ---------- OMDb ---------- */
+
 async function omdb(params, signal) {
   const url = new URL("https://www.omdbapi.com/");
   url.search = new URLSearchParams({ apikey: settings.omdbKey || DEFAULT_OMDB_KEY, ...params });
@@ -117,7 +135,7 @@ async function omdb(params, signal) {
 function describeLookupError(error, query) {
   if (/not found/i.test(error.message)) return `No movies or series found for “${query}”.`;
   if (/too many/i.test(error.message)) return "Too many matches – keep typing.";
-  if (/api key|limit/i.test(error.message)) return `OMDb says: ${error.message} You can set your own key in Settings.`;
+  if (/api key|limit/i.test(error.message)) return `OMDb says: ${error.message}`;
   return "OMDb could not be reached. Check your connection and try again.";
 }
 
@@ -167,18 +185,56 @@ function moveezScore(title) {
   return Number.isFinite(imdb) && Number.isFinite(audience) ? (Math.round(imdb * audience / 10) / 10).toFixed(1) : "";
 }
 
-/* ---------- FSK age rating ---------- */
+/* ---------- TMDB: FSK and streaming services in Germany ---------- */
 
-// OMDb only knows US ratings, so the German FSK comes from Wikidata. Resolves to { imdbID: "12", … }.
+async function tmdb(path, params = {}) {
+  const url = new URL(`https://api.themoviedb.org/3/${path}`);
+  url.search = new URLSearchParams({ api_key: tmdbKey(), ...params });
+  const { response, data } = await fetchJson(url);
+  if (!response.ok) throw new Error(data.status_message || `TMDB responded with ${response.status}`);
+  return data;
+}
+
+// Resolves to the fields TMDB knows for Germany; the streaming offers are JustWatch data.
+async function fetchTmdb(title) {
+  let kind = title.tmdbType || (title.type === "series" ? "tv" : "movie");
+  let id = title.tmdbId;
+  if (!id) {
+    const found = await tmdb(`find/${encodeURIComponent(title.imdbID)}`, { external_source: "imdb_id" });
+    const hit = found[`${kind}_results`]?.[0] || found.movie_results?.[0] || found.tv_results?.[0];
+    if (!hit) return { tmdbCheckedAt: new Date().toISOString() };
+    kind = found.movie_results?.includes(hit) ? "movie" : "tv";
+    id = hit.id;
+  }
+  const extra = kind === "tv" ? "content_ratings,watch/providers" : "release_dates,watch/providers";
+  const data = await tmdb(`${kind}/${id}`, { language: "de-DE", append_to_response: extra });
+  const germany = list => (list || []).find(entry => entry.iso_3166_1 === "DE");
+  const fsk = kind === "tv"
+    ? germany(data.content_ratings?.results)?.rating
+    : germany(data.release_dates?.results)?.release_dates?.map(release => release.certification).find(value => FSK_LEVELS.includes(value));
+  const offers = data["watch/providers"]?.results?.DE;
+  return {
+    tmdbId: id,
+    tmdbType: kind,
+    titleDe: data.title || data.name || "",
+    streaming: uniqueByName((offers?.flatrate || []).map(offer => streamingService(offer.provider_name, offer.logo_path))),
+    watchUrl: offers?.link || "",
+    ...(FSK_LEVELS.includes(fsk) ? { fsk } : {}),
+    tmdbCheckedAt: new Date().toISOString()
+  };
+}
+
+/* ---------- FSK fallback: Wikidata ---------- */
+
+// Resolves to { imdbID: "12", … }.
 async function fetchFsk(imdbIDs) {
   const ids = [...new Set(imdbIDs)].filter(id => /^tt\d+$/.test(id));
   if (!ids.length) return {};
   const query = `SELECT ?imdb ?fsk WHERE { VALUES ?imdb { ${ids.map(id => `"${id}"`).join(" ")} } ?item wdt:P345 ?imdb; wdt:P1981 ?fsk. }`;
   const { response, data } = await fetchJson(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(query)}`, { headers: { Accept: "application/sparql-results+json" } });
   if (!response.ok) throw new Error(`Wikidata responded with ${response.status}`);
-  const { results } = data;
   const found = {};
-  for (const row of results?.bindings || []) {
+  for (const row of data.results?.bindings || []) {
     const fsk = FSK_ITEMS[row.fsk?.value.split("/").pop()];
     const id = row.imdb?.value;
     // If Wikidata lists several ratings (e.g. re-releases), the strictest one wins.
@@ -187,15 +243,34 @@ async function fetchFsk(imdbIDs) {
   return found;
 }
 
-const fskOf = title => (FSK_LEVELS.includes(title.fsk) ? title.fsk : "");
-function fskBadge(title, attributes = "") {
+/* ---------- Cinemas ---------- */
+
+async function loadCinemas() {
+  try {
+    const { response, data } = await fetchJson("data/cinemas.json");
+    if (response.ok && Array.isArray(data.cinemas)) { cinemaData = data; render(); }
+  } catch { /* no programme available (e.g. local development) */ }
+}
+
+// Cinemas list German titles ("Die Odyssee" for "The Odyssey"), so match the original and the German TMDB title.
+function showingsOf(title) {
+  if (!cinemaData || title.type !== "movie") return [];
+  const names = [title.name, title.titleDe].filter(Boolean).map(normalize);
+  return cinemaData.cinemas.flatMap(cinema => {
+    const film = cinema.films.find(item => names.includes(normalize(item.title)) || names.includes(normalize(item.title.split(" - ")[0])));
+    const logo = CINEMAS.find(item => item.name === cinema.name)?.logo || "";
+    return film ? [{ name: cinema.name, logo, film }] : [];
+  });
+}
+
+const fskOf = title => (FSK_LEVELS.includes(title.fsk) ? title.fsk : showingsOf(title).map(showing => showing.film.fsk).find(fsk => FSK_LEVELS.includes(fsk)) || "");
+function fskBadge(title) {
   const fsk = fskOf(title);
   const label = fsk ? `FSK ${fsk}` : "FSK unknown";
-  return `<button type="button" class="fsk fsk-${fsk || "unknown"}" ${attributes} aria-label="${label} – change" title="${label}"><small>FSK</small><b>${fsk || "?"}</b></button>`;
+  return `<span class="fsk fsk-${fsk || "unknown"}" role="img" aria-label="${label}" title="${label}"><small>FSK</small><b>${fsk || "?"}</b></span>`;
 }
-const fskOptions = selected => `<option value="">Unknown</option>${FSK_LEVELS.map(level => `<option value="${level}"${level === selected ? " selected" : ""}>FSK ${level}</option>`).join("")}`;
 
-/* ---------- Background rating refresh ---------- */
+/* ---------- Background refresh ---------- */
 
 async function fetchRatings(title) {
   const year = parseInt(title.year, 10);
@@ -208,34 +283,41 @@ async function fetchRatings(title) {
   return update;
 }
 
-// Runs after the first render: the list is usable immediately and cards update as fresh ratings arrive.
-async function refreshRatings() {
-  const isStale = title => !(Date.now() - Date.parse(title.ratingsUpdatedAt) < REFRESH_AFTER_MS);
-  // Watchlist titles are kept fresh; binged titles are only backfilled once if they never had a refresh.
-  const due = titles.filter(title => (title.seen ? !title.ratingsUpdatedAt : isStale(title)));
+const isStale = value => !(Date.now() - Date.parse(value) < REFRESH_AFTER_MS);
+
+// Updates ratings, FSK and where to watch without ever blocking the list; cards change as data arrives.
+async function refresh(list, { ratings = title => true, streaming = title => true } = {}) {
   const BATCH = 4;
-  for (let index = 0; index < due.length; index += BATCH) {
-    const results = await Promise.allSettled(due.slice(index, index + BATCH).map(async title => [title.id, await fetchRatings(title)]));
+  for (let index = 0; index < list.length; index += BATCH) {
+    const updates = await Promise.all(list.slice(index, index + BATCH).map(async title => {
+      const [rated, tmdbData] = await Promise.all([
+        ratings(title) ? fetchRatings(title).catch(() => ({})) : {},
+        tmdbKey() && title.imdbID && streaming(title) ? fetchTmdb(title).catch(() => ({})) : {}
+      ]);
+      return [title, { ...rated, ...tmdbData }];
+    }));
     let changed = false;
-    for (const result of results) {
-      if (result.status !== "fulfilled") continue;
-      const [id, update] = result.value;
-      const title = titles.find(item => item.id === id);
-      if (title) { Object.assign(title, update); changed = true; }
+    for (const [title, update] of updates) {
+      if (titles.includes(title) && Object.keys(update).length) { Object.assign(title, update); changed = true; }
     }
     if (changed) persist();
   }
-  // FSK ratings rarely change: only look up titles that have none yet (one request for all of them).
-  const fskDue = titles.filter(title => title.imdbID && !title.fskManual && !fskOf(title));
+  // Wikidata fills in the FSK where TMDB has none (or no TMDB key is configured): one request for all titles.
+  const fskDue = list.filter(title => titles.includes(title) && title.imdbID && !FSK_LEVELS.includes(title.fsk));
   if (!fskDue.length) return;
   try {
     const found = await fetchFsk(fskDue.map(title => title.imdbID));
-    let changed = false;
-    for (const title of titles) {
-      if (found[title.imdbID] && !title.fskManual && !fskOf(title)) { title.fsk = found[title.imdbID]; changed = true; }
-    }
-    if (changed) persist();
+    const updated = fskDue.filter(title => found[title.imdbID]);
+    updated.forEach(title => { title.fsk = found[title.imdbID]; });
+    if (updated.length) persist();
   } catch { /* try again on the next start */ }
+}
+
+function refreshOnStart() {
+  // Watchlist titles are kept fresh; binged titles are only backfilled once.
+  const ratings = title => (title.seen ? !title.ratingsUpdatedAt : isStale(title.ratingsUpdatedAt));
+  const streaming = title => (title.seen ? !title.tmdbCheckedAt : isStale(title.tmdbCheckedAt));
+  refresh(titles.filter(title => ratings(title) || (tmdbKey() && streaming(title)) || !FSK_LEVELS.includes(title.fsk)), { ratings, streaming });
 }
 
 /* ---------- Rendering ---------- */
@@ -254,20 +336,25 @@ function ratingsHtml(title) {
   return moveez || imdb || rt ? `<div class="ratings">${moveez}${imdb}${rt}</div>` : "";
 }
 
-const providerOf = name => PROVIDERS.find(provider => provider.name === name);
-const providerLogo = name => (providerOf(name) ? `<img src="icons/providers/${providerOf(name).logo}.png" alt="">` : "");
-const providerChips = names => names.map(name => `<span class="chip provider">${providerLogo(name)}${esc(name)}</span>`).join("");
-function providerToggles(selected = []) {
-  return PROVIDERS.map(({ name }) => `<label><input type="checkbox" name="provider" value="${esc(name)}"${selected.includes(name) ? " checked" : ""}><span>${providerLogo(name)}${esc(name)}</span></label>`).join("");
+const logoImg = logo => (logo ? `<img src="${esc(logo)}" alt="" loading="lazy">` : "");
+function whereToWatch(title) {
+  const streaming = title.streaming.map(service => title.watchUrl
+    ? `<a class="chip provider" href="${esc(title.watchUrl)}" target="_blank" rel="noopener">${logoImg(service.logo)}${esc(service.name)}</a>`
+    : `<span class="chip provider">${logoImg(service.logo)}${esc(service.name)}</span>`);
+  const cinemas = title.seen ? [] : showingsOf(title).map(({ name, logo, film }) =>
+    `<a class="chip provider cinema" href="${esc(film.url)}" target="_blank" rel="noopener" title="Showtimes at ${esc(name)}">${logoImg(logo)}${esc(name)}</a>`);
+  return [...cinemas, ...streaming].join("");
 }
-const checkedProviders = container => [...container.querySelectorAll('input[name="provider"]:checked')].map(input => input.value);
+
+function popcornButtons(title) {
+  return `<div class="popcorn-rate" role="group" aria-label="Your rating">${[1, 2, 3, 4, 5].map(value =>
+    `<button type="button" class="${value <= (title.userRating || 0) ? "selected" : ""}" data-rate="${esc(title.id)}" data-value="${value}" aria-pressed="${value === title.userRating}" aria-label="${value} popcorn bag${value > 1 ? "s" : ""}">🍿</button>`).join("")}</div>`;
+}
 
 function card(title) {
   const genres = title.genres.map(genre => `<span class="chip">${esc(genre)}</span>`).join("");
-  const providers = providerChips(title.services);
-  const watched = title.seen
-    ? `<div class="note">Watched ${esc(formatDate(title.seenOn || ""))}${title.userRating ? ` · <span class="popcorn" aria-label="${title.userRating} of 5">${"🍿".repeat(title.userRating)}</span>` : ""}</div>`
-    : "";
+  const providers = whereToWatch(title);
+  const watched = title.seen ? `<div class="watched"><span class="note">Watched ${esc(formatDate(title.seenOn || ""))}</span>${popcornButtons(title)}</div>` : "";
   const primary = title.seen
     ? `<button class="button soft small" data-unwatch="${esc(title.id)}">${icon("undo")}Watch again</button>`
     : `<button class="button primary small" data-watch="${esc(title.id)}">${icon("check")}Binged</button>`;
@@ -276,23 +363,23 @@ function card(title) {
     <div class="card-body">
       <div class="card-head">
         <div>
-          <p class="meta">${formatLabel(title.type)}${title.year ? ` · ${esc(title.year)}` : ""}</p>
+          <p class="meta">${typeIcon(title.type)}${title.year ? `<span>${esc(title.year)}</span>` : ""}</p>
           <h2>${esc(title.name)}</h2>
         </div>
-        ${fskBadge(title, `data-edit="${esc(title.id)}"`)}
+        ${fskBadge(title)}
       </div>
       ${ratingsHtml(title)}
       ${genres ? `<div class="chips">${genres}</div>` : ""}
       ${providers ? `<div class="chips">${providers}</div>` : ""}
       ${watched}
-      <div class="card-actions">${primary}<span class="card-tools"><button class="icon-button" data-edit="${esc(title.id)}" aria-label="Edit ${esc(title.name)}" title="Edit FSK and where to watch">${icon("edit")}</button><button class="icon-button danger" data-remove="${esc(title.id)}" aria-label="Remove ${esc(title.name)}" title="Remove">${icon("trash")}</button></span></div>
+      <div class="card-actions">${primary}<button class="icon-button danger" data-remove="${esc(title.id)}" aria-label="Remove ${esc(title.name)}" title="Remove">${icon("trash")}</button></div>
     </div>
   </article>`;
 }
 
 function emptyState(filtered) {
   if (filtered) return `<div class="empty"><h2>No matches</h2><p>Nothing on this list fits your search or filters.</p></div>`;
-  if (currentView === "binged") return `<div class="empty"><img src="${ASSETS}logo.png" alt=""><h2>Nothing binged yet</h2><p>Mark a title as watched and give it your popcorn rating.</p></div>`;
+  if (currentView === "binged") return `<div class="empty"><img src="${ASSETS}logo.png" alt=""><h2>Nothing binged yet</h2><p>Tap “Binged” on a title once you have watched it.</p></div>`;
   return `<div class="empty"><img src="${ASSETS}logo.png" alt=""><h2>Your watchlist is empty</h2><p>Search IMDb for the movies and series you want to watch next.</p><button class="button primary" data-action="add">${icon("plus")}Add title</button></div>`;
 }
 
@@ -311,6 +398,9 @@ const SORTS = {
   moveez: { label: "moveez score", compare: descending(title => parseFloat(moveezScore(title))) }
 };
 
+const inCurrentView = title => (currentView === "binged" ? title.seen : !title.seen);
+const servicesOf = title => [...title.streaming.map(service => service.name), ...(title.seen ? [] : showingsOf(title).map(showing => showing.name))];
+
 function visibleTitles() {
   const query = $("searchInput").value.trim().toLowerCase();
   const type = $("typeFilter").value;
@@ -318,29 +408,36 @@ function visibleTitles() {
   const genre = $("genreFilter").value;
   const fsk = $("fskFilter").value;
   return titles
-    .filter(title => (currentView === "binged" ? title.seen : !title.seen))
-    .filter(title => !query || title.name.toLowerCase().includes(query))
+    .filter(inCurrentView)
+    .filter(title => !query || [title.name, title.titleDe].some(name => name?.toLowerCase().includes(query)))
     .filter(title => type === "all" || title.type === type)
     .filter(title => genre === "all" || title.genres.includes(genre))
-    .filter(title => service === "all" || title.services.includes(service))
+    .filter(title => service === "all" || servicesOf(title).includes(service))
     // With an age limit, titles without a known FSK are hidden: better safe with kids around.
     .filter(title => fsk === "all" || (fskOf(title) !== "" && Number(fskOf(title)) <= Number(fsk)))
     .sort(SORTS[sortBy].compare);
 }
 
+function fillSelect(select, allLabel, groups) {
+  const current = select.value;
+  const options = list => list.map(item => `<option>${esc(item)}</option>`).join("");
+  select.innerHTML = `<option value="all">${allLabel}</option>${groups.map(([label, list]) => (label ? `<optgroup label="${label}">${options(list)}</optgroup>` : options(list))).join("")}`;
+  select.value = groups.some(([, list]) => list.includes(current)) ? current : "all";
+}
+
 function render() {
-  const genres = [...new Set(titles.flatMap(title => title.genres))].sort();
-  const genre = genres.includes($("genreFilter").value) ? $("genreFilter").value : "all";
-  $("genreFilter").innerHTML = `<option value="all">All genres</option>${genres.map(item => `<option>${esc(item)}</option>`).join("")}`;
-  $("genreFilter").value = genre;
+  const inView = titles.filter(inCurrentView);
+  fillSelect($("genreFilter"), "All genres", [["", [...new Set(titles.flatMap(title => title.genres))].sort()]]);
+  const streamingNames = [...new Set(inView.flatMap(title => title.streaming.map(service => service.name)))].sort();
+  const cinemaNames = CINEMAS.map(cinema => cinema.name).filter(name => inView.some(title => servicesOf(title).includes(name)));
+  fillSelect($("serviceFilter"), "All services", [["Streaming", streamingNames], ["Cinema", cinemaNames]].filter(([, list]) => list.length));
   const sorts = Object.keys(SORTS).filter(key => key !== "binged" || currentView === "binged");
   $("sortSelect").innerHTML = sorts.map(key => `<option value="${key}">${SORTS[key].label}</option>`).join("");
   $("sortSelect").value = sortBy;
 
-  const inView = titles.filter(title => (currentView === "binged" ? title.seen : !title.seen));
   const visible = visibleTitles();
-
-  $("viewTitle").textContent = `${currentView === "binged" ? "Binged" : "Watchlist"} (${inView.length})`;
+  $("viewName").textContent = currentView === "binged" ? "Binged" : "Watchlist";
+  $("viewCount").textContent = inView.length;
   $("surpriseButton").hidden = currentView === "binged";
   document.querySelectorAll(".tab").forEach(tab => {
     const active = tab.dataset.view === currentView;
@@ -409,7 +506,6 @@ async function lookup(query) {
 }
 
 function detailHtml(title) {
-  const onList = isOnList(title.imdbID);
   const meta = [formatLabel(title.type), title.year, title.runtime].filter(Boolean).map(esc).join(" · ");
   return `<div class="detail">
       <img src="${esc(posterOf(title.poster))}" alt="" data-fallback>
@@ -424,12 +520,7 @@ function detailHtml(title) {
     <div class="links">
       <a class="button ghost small" href="${esc(imdbUrl(title))}" target="_blank" rel="noopener">IMDb ${icon("external")}</a>
       <a class="button ghost small" href="${esc(rtUrl(title))}" target="_blank" rel="noopener">Rotten Tomatoes ${icon("external")}</a>
-    </div>
-    ${onList ? "" : `<div class="detail-options">
-      <label class="field">Age rating (FSK)<select id="detailFsk">${fskOptions(title.fsk)}</select><small id="detailFskHint">Looking it up on Wikidata…</small></label>
-      <h4>Where to watch</h4>
-      <div class="toggle-chips">${providerToggles()}</div>
-    </div>`}`;
+    </div>`;
 }
 
 async function openDetail(imdbID) {
@@ -441,26 +532,19 @@ async function openDetail(imdbID) {
   $("lookupBack").hidden = false;
   $("titleDialogHeading").textContent = "Details";
   $("detailPane").innerHTML = `<p class="hint">Loading…</p>`;
-  // Wikidata only needs the IMDb id, so the FSK lookup starts right away and never holds up the details.
-  const fskLookup = detailFskLookup = fetchFsk([imdbID]).catch(() => ({}));
   try {
     const data = await omdb({ i: imdbID, plot: "short" });
     if (token !== detailToken) return;
     const base = toTitle(data);
     const rt = await fetchRtAudience(base).catch(() => ({ rtAudience: "", rtUrl: "" }));
     if (token !== detailToken) return;
-    detail = { ...base, ...rt, fsk: "", ratingsUpdatedAt: new Date().toISOString() };
+    detail = { ...base, ...rt, ratingsUpdatedAt: new Date().toISOString() };
     const onList = isOnList(detail.imdbID);
     $("titleDialogHeading").textContent = detail.name;
     $("detailPane").innerHTML = detailHtml(detail);
     $("confirmAdd").disabled = onList;
     $("confirmAdd").textContent = onList ? "Already on your list" : "Add to watchlist";
     $("detailFoot").hidden = false;
-    const found = (await fskLookup)[imdbID];
-    if (token !== detailToken || !$("detailFsk")) return;
-    detail.fsk = found || "";
-    if (found && !$("detailFsk").value) $("detailFsk").value = found;
-    $("detailFskHint").textContent = found ? "Found on Wikidata – change it if it is wrong." : "Not found on Wikidata – please set it yourself.";
   } catch (error) {
     if (token !== detailToken) return;
     $("detailPane").innerHTML = `<p class="hint error">The details could not be loaded. ${esc(error.message)}</p>`;
@@ -469,25 +553,14 @@ async function openDetail(imdbID) {
 
 function addDetail() {
   if (!detail || isOnList(detail.imdbID)) return;
-  const fsk = $("detailFsk").value;
-  const entry = {
-    id: newId(),
-    ...detail,
-    fsk,
-    fskManual: fsk !== detail.fsk,
-    services: checkedProviders($("detailPane")),
-    seen: false,
-    createdAt: new Date().toISOString()
-  };
+  const entry = { id: newId(), ...detail, fsk: "", streaming: [], seen: false, createdAt: new Date().toISOString() };
   titles.unshift(entry);
-  // Added before Wikidata answered: fill in the FSK as soon as it arrives.
-  if (!entry.fsk) detailFskLookup?.then(found => {
-    if (found[entry.imdbID] && !entry.fsk && !entry.fskManual && titles.includes(entry)) { entry.fsk = found[entry.imdbID]; persist(); }
-  });
-  if (currentView !== "watchlist") currentView = "watchlist";
+  currentView = "watchlist";
   persist();
   $("titleDialog").close();
   showStatus(`“${entry.name}” added to your watchlist.`);
+  // FSK and where to watch are looked up in the background.
+  refresh([entry], { ratings: () => false });
 }
 
 /* ---------- Surprise me ---------- */
@@ -535,38 +608,31 @@ async function surpriseMe() {
   }
 }
 
-/* ---------- Rating ---------- */
+/* ---------- Settings ---------- */
 
-function renderPopcorn() {
-  $("popcornRating").innerHTML = [1, 2, 3, 4, 5]
-    .map(value => `<button type="button" role="radio" aria-checked="${value === selectedRating}" class="${value <= selectedRating ? "selected" : ""}" data-rating="${value}" aria-label="${value} popcorn bag${value > 1 ? "s" : ""}">🍿</button>`)
-    .join("");
+const SETTING_FIELDS = ["omdbKey", "tmdbKey", "llmEndpoint", "llmKey", "llmModel"];
+
+function openSettings() {
+  SETTING_FIELDS.forEach(id => { $(id).value = settings[id] || ""; });
+  $("appVersion").textContent = BUILD.startsWith("__") ? "development build" : BUILD;
+  $("tmdbStatus").textContent = tmdbKey() ? "FSK and streaming services are looked up automatically." : "Without a TMDB key only the cinemas and Wikidata FSK ratings are available.";
+  $("settingsDialog").showModal();
 }
 
-function openRating(id) {
-  const title = titles.find(item => item.id === id);
-  if (!title) return;
-  ratingTargetId = id;
-  selectedRating = 0;
-  $("ratingTitle").textContent = title.name;
-  $("watchedDate").value = today();
-  renderPopcorn();
-  $("ratingDialog").showModal();
-}
-
-/* ---------- Edit FSK and providers ---------- */
-
-function openEdit(id) {
-  const title = titles.find(item => item.id === id);
-  if (!title) return;
-  editTargetId = id;
-  $("editTitle").textContent = title.name;
-  $("editFsk").innerHTML = fskOptions(fskOf(title));
-  $("editProviders").innerHTML = providerToggles(title.services);
-  $("editDialog").showModal();
+function saveSettings() {
+  const tmdbChanged = $("tmdbKey").value.trim() !== (settings.tmdbKey || "");
+  SETTING_FIELDS.forEach(id => { settings[id] = $(id).value.trim(); });
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  $("settingsDialog").close();
+  showStatus("Settings saved on this device.");
+  if (tmdbChanged && tmdbKey()) refresh(titles, { ratings: () => false });
 }
 
 /* ---------- Events ---------- */
+
+// Show unexpected errors instead of silently doing nothing, so problems on a phone can be reported.
+window.addEventListener("error", event => showStatus(`Something went wrong: ${event.message}`, "error"));
+window.addEventListener("unhandledrejection", event => showStatus(`Something went wrong: ${event.reason?.message || event.reason}`, "error"));
 
 document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
   currentView = tab.dataset.view;
@@ -578,8 +644,6 @@ document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", (
 $("searchInput").addEventListener("input", render);
 ["typeFilter", "genreFilter", "serviceFilter", "fskFilter"].forEach(id => $(id).addEventListener("change", render));
 $("sortSelect").addEventListener("change", event => { sortBy = event.target.value; render(); });
-const providerOptions = cinema => PROVIDERS.filter(provider => Boolean(provider.cinema) === cinema).map(({ name }) => `<option>${esc(name)}</option>`).join("");
-$("serviceFilter").insertAdjacentHTML("beforeend", `<optgroup label="Streaming">${providerOptions(false)}</optgroup><optgroup label="Cinema">${providerOptions(true)}</optgroup>`);
 
 $("addButton").addEventListener("click", openAddDialog);
 $("surpriseButton").addEventListener("click", surpriseMe);
@@ -587,22 +651,27 @@ $("surpriseButton").addEventListener("click", surpriseMe);
 $("titleGrid").addEventListener("click", event => {
   const target = event.target.closest("button");
   if (!target) return;
+  const title = titles.find(item => item.id === (target.dataset.watch || target.dataset.unwatch || target.dataset.rate || target.dataset.remove));
   if (target.dataset.action === "add") openAddDialog();
-  if (target.dataset.watch) openRating(target.dataset.watch);
-  if (target.dataset.edit) openEdit(target.dataset.edit);
+  if (!title) return;
+  if (target.dataset.watch) {
+    Object.assign(title, { seen: true, seenOn: today(), userRating: 0 });
+    persist();
+    showStatus(`“${title.name}” moved to Binged – rate it there with popcorn.`);
+  }
   if (target.dataset.unwatch) {
-    const title = titles.find(item => item.id === target.dataset.unwatch);
-    if (!title) return;
     Object.assign(title, { seen: false, userRating: 0, seenOn: undefined });
     persist();
     showStatus(`“${title.name}” is back on your watchlist.`);
   }
-  if (target.dataset.remove) {
-    const title = titles.find(item => item.id === target.dataset.remove);
-    if (title && confirm(`Remove “${title.name}”?`)) {
-      titles = titles.filter(item => item !== title);
-      persist();
-    }
+  if (target.dataset.rate) {
+    const value = Number(target.dataset.value);
+    title.userRating = value === title.userRating ? 0 : value;
+    persist();
+  }
+  if (target.dataset.remove && confirm(`Remove “${title.name}”?`)) {
+    titles = titles.filter(item => item !== title);
+    persist();
   }
 });
 
@@ -623,18 +692,8 @@ $("lookupResults").addEventListener("click", event => {
 $("lookupBack").addEventListener("click", () => { showLookupPane(); $("lookupInput").focus(); });
 $("confirmAdd").addEventListener("click", addDetail);
 
-$("settingsButton").addEventListener("click", () => {
-  ["omdbKey", "llmEndpoint", "llmKey", "llmModel"].forEach(id => { $(id).value = settings[id] || ""; });
-  $("appVersion").textContent = BUILD.startsWith("__") ? "development build" : BUILD;
-  $("settingsDialog").showModal();
-});
-$("settingsForm").addEventListener("submit", event => {
-  event.preventDefault();
-  ["omdbKey", "llmEndpoint", "llmKey", "llmModel"].forEach(id => { settings[id] = $(id).value.trim(); });
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  $("settingsDialog").close();
-  showStatus("Settings saved on this device.");
-});
+$("settingsButton").addEventListener("click", openSettings);
+$("saveSettings").addEventListener("click", saveSettings);
 $("clearData").addEventListener("click", () => {
   if (!confirm("Delete all titles and settings stored on this device?")) return;
   titles = [];
@@ -644,35 +703,6 @@ $("clearData").addEventListener("click", () => {
   $("settingsDialog").close();
   render();
   showStatus("Local data cleared.");
-});
-
-$("popcornRating").addEventListener("click", event => {
-  const button = event.target.closest("[data-rating]");
-  if (!button) return;
-  const value = Number(button.dataset.rating);
-  selectedRating = value === selectedRating ? 0 : value;
-  renderPopcorn();
-});
-$("ratingForm").addEventListener("submit", event => {
-  event.preventDefault();
-  const title = titles.find(item => item.id === ratingTargetId);
-  if (!title) return;
-  Object.assign(title, { seen: true, seenOn: $("watchedDate").value || today(), userRating: selectedRating });
-  persist();
-  $("ratingDialog").close();
-  showStatus(`“${title.name}” moved to your binge history.`);
-});
-$("editForm").addEventListener("submit", event => {
-  event.preventDefault();
-  const title = titles.find(item => item.id === editTargetId);
-  if (!title) return;
-  const fsk = $("editFsk").value;
-  // A rating chosen by hand is never overwritten by Wikidata; "Unknown" hands it back to the automatic lookup.
-  if (fsk !== fskOf(title)) Object.assign(title, { fsk, fskManual: fsk !== "" });
-  title.services = checkedProviders($("editProviders"));
-  persist();
-  $("editDialog").close();
-  showStatus(`“${title.name}” updated.`);
 });
 
 document.querySelectorAll("dialog").forEach(dialog => {
@@ -697,4 +727,5 @@ if ("serviceWorker" in navigator) {
   }).catch(() => {});
 }
 render();
-refreshRatings();
+loadCinemas();
+refreshOnStart();

@@ -4,7 +4,19 @@ const SERIES = ["the bear"];
 const YEARS = { Arrival: "2016", Frozen: "2013" };
 const IMDB = { Arrival: "7.9", Frozen: "7.4" };
 // Wikidata items of the FSK ratings: Q20644794 = FSK 0, Q20644796 = FSK 12.
-const FSK = { Frozen: "Q20644794", Arrival: "Q20644796", "Dune: Part Two": "Q20644796" };
+const WIKIDATA_FSK = { Frozen: "Q20644794", Arrival: "Q20644796", "Dune: Part Two": "Q20644796" };
+// TMDB (only used when a TMDB key is configured).
+const TMDB = {
+  "Toy Story 5": { fsk: "0", titleDe: "Toy Story 5", flatrate: ["Disney Plus"] },
+  "The Odyssey": { fsk: "12", titleDe: "Die Odyssee", flatrate: [] },
+  "The Bear": { fsk: "16", titleDe: "The Bear: King of the Kitchen", flatrate: ["Disney Plus", "WOW"] }
+};
+const CINEMAS = {
+  cinemas: [
+    { name: "CinemaxX Dresden", url: "https://www.kinoprogramm.com/kino/dresden/cinemaxx-42197", films: [{ title: "Die Odyssee", fsk: "12", days: ["2026-09-23"], url: "https://www.kinoprogramm.com/kino/dresden/cinemaxx/die-odyssee-1" }] },
+    { name: "UCI Dresden", url: "https://www.kinoprogramm.com/kino/dresden/uci-kinowelt-elbe-park-40872", films: [{ title: "Toy Story 5", fsk: "0", days: ["2026-09-23"], url: "https://www.kinoprogramm.com/kino/dresden/uci/toy-story-5-2" }] }
+  ]
+};
 
 const names = new Map();
 function idFor(name) {
@@ -36,11 +48,28 @@ test.beforeEach(async ({ page }) => {
   await page.route("https://query.wikidata.org/**", async route => {
     const query = new URL(route.request().url()).searchParams.get("query");
     const bindings = [...query.matchAll(/"(tt\d+)"/g)]
-      .map(([, id]) => [id, FSK[names.get(id)]])
+      .map(([, id]) => [id, WIKIDATA_FSK[names.get(id)]])
       .filter(([, item]) => item)
       .map(([id, item]) => ({ imdb: { value: id }, fsk: { value: `http://www.wikidata.org/entity/${item}` } }));
     await route.fulfill({ contentType: "application/sparql-results+json", body: JSON.stringify({ results: { bindings } }) });
   });
+  await page.route("https://api.themoviedb.org/3/**", async route => {
+    const url = new URL(route.request().url());
+    const [, kind, key] = url.pathname.match(/\/3\/(find|movie|tv)\/([^/]+)/);
+    const name = kind === "find" ? names.get(key) : names.get(`tt${key}`);
+    const info = TMDB[name];
+    if (kind === "find") {
+      const hit = info ? [{ id: Number(key.slice(2)) }] : [];
+      const series = SERIES.includes(name.toLowerCase());
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ movie_results: series ? [] : hit, tv_results: series ? hit : [] }) });
+    }
+    const providers = { results: { DE: { link: "https://www.themoviedb.org/watch", flatrate: info.flatrate.map(provider_name => ({ provider_name, logo_path: `/${provider_name}.png` })) } } };
+    const body = kind === "tv"
+      ? { name: info.titleDe, content_ratings: { results: [{ iso_3166_1: "US", rating: "TV-MA" }, { iso_3166_1: "DE", rating: info.fsk }] }, "watch/providers": providers }
+      : { title: info.titleDe, release_dates: { results: [{ iso_3166_1: "DE", release_dates: [{ certification: "" }, { certification: info.fsk }] }] }, "watch/providers": providers };
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.route("**/data/cinemas.json", route => route.fulfill({ status: 404, body: "" }));
   await page.goto("/");
   await page.evaluate(async () => {
     localStorage.clear();
@@ -53,31 +82,63 @@ test.beforeEach(async ({ page }) => {
 const tab = (page, name) => page.getByRole("navigation", { name: "Lists" }).getByRole("button", { name });
 const cardOf = (page, name) => page.locator(".card", { has: page.getByRole("heading", { name, exact: true }) });
 
-async function addTitle(page, title, { providers = [], fsk } = {}) {
+async function useTmdbAndCinemas(page) {
+  await page.route("**/data/cinemas.json", route => route.fulfill({ contentType: "application/json", body: JSON.stringify(CINEMAS) }));
+  await page.evaluate(() => localStorage.setItem("moveez-settings-v2", JSON.stringify({ tmdbKey: "test-key" })));
+  await page.reload();
+}
+
+async function addTitle(page, title) {
   await page.getByRole("button", { name: "Add title" }).first().click();
   const dialog = page.locator("#titleDialog");
   await dialog.getByRole("searchbox", { name: "Search movies and series" }).fill(title);
   await dialog.locator(".lookup-result").click();
-  await expect(dialog.getByRole("button", { name: "Add to watchlist" })).toBeVisible();
-  if (fsk !== undefined) await dialog.getByLabel("Age rating (FSK)").selectOption(fsk);
-  for (const provider of providers) await dialog.getByRole("checkbox", { name: provider }).check();
   await dialog.getByRole("button", { name: "Add to watchlist" }).click();
   await expect(dialog).toBeHidden();
 }
 
-test("shows the two list views with counts and adds a title with IMDb, RT audience, moveez score and FSK", async ({ page }) => {
-  await expect(page.getByRole("heading", { name: "Watchlist (0)" })).toBeVisible();
+test("shows the list count in a bubble and adds a title with IMDb, RT audience, moveez score and FSK", async ({ page }) => {
+  await expect(page.getByRole("heading", { name: "Watchlist 0" })).toBeVisible();
   await expect(tab(page, "Binged")).toHaveText("Binged");
 
   await addTitle(page, "Dune: Part Two");
 
-  await expect(page.getByRole("heading", { name: "Watchlist (1)" })).toBeVisible();
+  await expect(page.locator("#viewCount")).toHaveText("1");
   const card = cardOf(page, "Dune: Part Two");
+  await expect(card.getByRole("img", { name: "Movie" })).toBeVisible();
   await expect(card).toContainText("8.5");
   await expect(card).toContainText("92%");
   await expect(card.locator(".score")).toHaveText("7.8");
-  await expect(card.locator(".fsk")).toHaveAttribute("title", "FSK 12");
+  // No TMDB key here: the FSK comes from Wikidata in the background.
+  await expect(card.getByRole("img", { name: "FSK 12" })).toBeVisible();
   await expect(card.getByRole("link", { name: /Rotten Tomatoes/ })).toHaveAttribute("href", "https://www.rottentomatoes.com/m/dune_part_two");
+  await expect(card.getByRole("button", { name: /edit/i })).toHaveCount(0);
+});
+
+test("looks up FSK and streaming services automatically after adding a title", async ({ page }) => {
+  await useTmdbAndCinemas(page);
+  await addTitle(page, "The Bear");
+
+  const card = cardOf(page, "The Bear");
+  await expect(card.getByRole("img", { name: "TV series" })).toBeVisible();
+  await expect(card.getByRole("img", { name: "FSK 16" })).toBeVisible();
+  const services = card.locator(".chip.provider");
+  await expect(services).toHaveText(["Disney+", "WOW"]);
+  await expect(services.first().locator("img")).toHaveAttribute("src", "icons/providers/disney-plus.png");
+  await expect(services.nth(1).locator("img")).toHaveAttribute("src", "https://image.tmdb.org/t/p/w92/WOW.png");
+});
+
+test("shows the cinemas that are playing a movie, also under its German title", async ({ page }) => {
+  await useTmdbAndCinemas(page);
+  await addTitle(page, "Toy Story 5");
+  await addTitle(page, "The Odyssey");
+
+  await expect(cardOf(page, "Toy Story 5").locator(".chip.provider")).toHaveText(["UCI Dresden", "Disney+"]);
+  const odyssey = cardOf(page, "The Odyssey").getByRole("link", { name: "CinemaxX Dresden" });
+  await expect(odyssey).toHaveAttribute("href", "https://www.kinoprogramm.com/kino/dresden/cinemaxx/die-odyssee-1");
+
+  await page.getByLabel("Filter by service or cinema").selectOption("CinemaxX Dresden");
+  await expect(page.locator(".card h2")).toHaveText(["The Odyssey"]);
 });
 
 test("refreshes watchlist ratings and missing FSK in the background after start-up", async ({ page }) => {
@@ -85,27 +146,27 @@ test("refreshes watchlist ratings and missing FSK in the background after start-
   const gate = new Promise(resolve => { release = resolve; });
   await page.route("https://www.omdbapi.com/**", async route => { await gate; await route.fallback(); });
   await page.evaluate(id => localStorage.setItem("moveez-titles-v2", JSON.stringify([
-    { id: "a", imdbID: id, name: "Arrival", year: "2016", type: "movie", imdbRating: "5.0", rtRating: "40", genres: [], services: [], cinemaNow: true, cinema: "UCI Dresden", seen: false }
+    { id: "a", imdbID: id, name: "Arrival", year: "2016", type: "movie", imdbRating: "5.0", rtRating: "40", genres: [], services: ["Netflix", "UCI Dresden"], cinemaNow: true, cinema: "UCI Dresden", seen: false }
   ])), idFor("Arrival"));
   await page.reload();
 
   const card = cardOf(page, "Arrival");
   await expect(card).toContainText("5.0");
   await expect(card).not.toContainText("40%");
-  // The former "now in cinema" flag became a regular provider label.
-  await expect(card.locator(".chip.provider")).toHaveText("UCI Dresden");
+  // Services picked by hand in older versions are kept until TMDB knows better; cinemas come from the programmes.
+  await expect(card.locator(".chip.provider")).toHaveText(["Netflix"]);
 
   release();
   await expect(card).toContainText("7.9");
   await expect(card).toContainText("92%");
   await expect(card.locator(".score")).toHaveText("7.3");
-  await expect(card.locator(".fsk")).toHaveAttribute("title", "FSK 12");
+  await expect(card.getByRole("img", { name: "FSK 12" })).toBeVisible();
 });
 
-test("shows details and adds a title while the FSK lookup hangs", async ({ page }) => {
+test("adds a title even while the FSK lookup hangs", async ({ page }) => {
   await page.route("https://query.wikidata.org/**", () => new Promise(() => {}));
-  await addTitle(page, "Arrival", { fsk: "12" });
-  await expect(cardOf(page, "Arrival").locator(".fsk")).toHaveAttribute("title", "FSK 12");
+  await addTitle(page, "Arrival");
+  await expect(cardOf(page, "Arrival").getByRole("img", { name: "FSK unknown" })).toBeVisible();
 });
 
 test("closes the add dialog with the X button", async ({ page }) => {
@@ -142,38 +203,14 @@ test("filters by FSK, hiding titles without a known age rating", async ({ page }
   await addTitle(page, "Frozen");
   await addTitle(page, "Arrival");
   await addTitle(page, "The Bear");
-  await expect(cardOf(page, "Frozen").locator(".fsk")).toHaveAttribute("title", "FSK 0");
-  await expect(cardOf(page, "The Bear").locator(".fsk")).toHaveAttribute("title", "FSK unknown");
+  await expect(cardOf(page, "Frozen").getByRole("img", { name: "FSK 0" })).toBeVisible();
+  await expect(cardOf(page, "Arrival").getByRole("img", { name: "FSK 12" })).toBeVisible();
+  await expect(cardOf(page, "The Bear").getByRole("img", { name: "FSK unknown" })).toBeVisible();
 
   await page.getByLabel("Filter by age rating").selectOption("6");
   await expect(page.locator(".card h2")).toHaveText(["Frozen"]);
-
-  // Setting the FSK by hand makes the title show up in the filtered list.
-  await page.getByLabel("Filter by age rating").selectOption("all");
-  await cardOf(page, "The Bear").getByRole("button", { name: "FSK unknown – change" }).click();
-  const dialog = page.locator("#editDialog");
-  await dialog.getByLabel("Age rating (FSK)").selectOption("6");
-  await dialog.getByRole("button", { name: "Save" }).click();
-  await page.getByLabel("Filter by age rating").selectOption("6");
-  await expect(page.locator(".card h2")).toHaveText(["The Bear", "Frozen"]);
-});
-
-test("offers streaming services and cinemas with logos, and filters by them", async ({ page }) => {
-  await addTitle(page, "Arrival", { providers: ["CinemaxX Dresden", "Netflix"] });
-  await addTitle(page, "Frozen", { providers: ["Disney+"] });
-
-  const chips = cardOf(page, "Arrival").locator(".chip.provider");
-  await expect(chips).toHaveText(["Netflix", "CinemaxX Dresden"]);
-  await expect(chips.first().locator("img")).toHaveAttribute("src", "icons/providers/netflix.png");
-
-  await page.getByLabel("Filter by service or cinema").selectOption("CinemaxX Dresden");
-  await expect(page.locator(".card h2")).toHaveText(["Arrival"]);
-
-  await page.getByLabel("Filter by service or cinema").selectOption("all");
-  await cardOf(page, "Frozen").getByRole("button", { name: "Edit Frozen" }).click();
-  await page.locator("#editDialog").getByRole("checkbox", { name: "UCI Dresden" }).check();
-  await page.locator("#editDialog").getByRole("button", { name: "Save" }).click();
-  await expect(cardOf(page, "Frozen").locator(".chip.provider")).toHaveText(["Disney+", "UCI Dresden"]);
+  await page.getByLabel("Filter by age rating").selectOption("12");
+  await expect(page.locator(".card h2")).toHaveText(["Arrival", "Frozen"]);
 });
 
 test("sorts by date added, release year and ratings", async ({ page }) => {
@@ -191,29 +228,32 @@ test("sorts by date added, release year and ratings", async ({ page }) => {
   await expect(order()).toHaveText(["Dune: Part Two", "Arrival", "Frozen"]);
 });
 
-test("moves a title to binge history with a popcorn rating", async ({ page }) => {
+test("moves a title to Binged with one tap and rates it with popcorn there", async ({ page }) => {
   await addTitle(page, "Spirited Away");
-  await cardOf(page, "Spirited Away").getByRole("button", { name: "Binged" }).click();
-  await page.locator('[data-rating="5"]').click();
-  await page.getByRole("button", { name: "Add to binge history" }).click();
+  await cardOf(page, "Spirited Away").getByRole("button", { name: "Binged" }).tap();
 
-  await expect(page.getByRole("heading", { name: "Watchlist (0)" })).toBeVisible();
-  await tab(page, "Binged").click();
-  await expect(page.getByRole("heading", { name: "Binged (1)" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Spirited Away" })).toBeVisible();
-  await expect(page.locator("#titleGrid").getByText("🍿🍿🍿🍿🍿")).toBeVisible();
+  await expect(page.locator("#viewCount")).toHaveText("0");
+  await tab(page, "Binged").tap();
+  await expect(page.getByRole("heading", { name: "Binged 1" })).toBeVisible();
+  const card = cardOf(page, "Spirited Away");
+  await card.getByRole("button", { name: "4 popcorn bags" }).tap();
+  await expect(card.locator(".popcorn-rate .selected")).toHaveCount(4);
+  await page.reload();
+  await tab(page, "Binged").tap();
+  await expect(cardOf(page, "Spirited Away").locator(".popcorn-rate .selected")).toHaveCount(4);
 });
 
-test("persists settings locally and closes settings without saving via X", async ({ page }) => {
-  await page.getByRole("button", { name: "Open settings" }).click();
+test("opens settings by tap, saves them and closes without saving via X", async ({ page }) => {
+  await page.getByRole("button", { name: "Open settings" }).tap();
+  await expect(page.locator("#settingsDialog")).toBeVisible();
   await page.getByLabel("OMDb API key").fill("test-key");
   await page.getByLabel("LLM model").fill("test-model");
-  await page.getByRole("button", { name: "Save settings" }).click();
+  await page.getByRole("button", { name: "Save settings" }).tap();
   await page.reload();
-  await page.getByRole("button", { name: "Open settings" }).click();
+  await page.getByRole("button", { name: "Open settings" }).tap();
   await expect(page.getByLabel("OMDb API key")).toHaveValue("test-key");
   await page.getByLabel("LLM model").fill("changed");
-  await page.locator("#settingsDialog").getByRole("button", { name: "Close" }).click();
-  await page.getByRole("button", { name: "Open settings" }).click();
+  await page.locator("#settingsDialog").getByRole("button", { name: "Close" }).tap();
+  await page.getByRole("button", { name: "Open settings" }).tap();
   await expect(page.getByLabel("LLM model")).toHaveValue("test-model");
 });

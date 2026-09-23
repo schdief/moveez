@@ -24,7 +24,8 @@
       <symbol id="i-tv-check" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="m8.5 2.5 3.5 3.5 3.5-3.5"/><path d="m9 12.5 2 2 4-4"/></symbol>
       <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol>
       <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
-      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
+      <symbol id="i-film" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="7.6" r="1.7"/><circle cx="12" cy="16.4" r="1.7"/><circle cx="7.6" cy="12" r="1.7"/><circle cx="16.4" cy="12" r="1.7"/></symbol>
+      <symbol id="i-tv" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="12.5" rx="2.5"/><path d="m8.5 3 3.5 4 3.5-4"/></symbol>
       <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
       <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
       <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></symbol>
@@ -53,7 +54,7 @@
 
     <main class="app-shell">
       <div class="page-head">
-        <h1 id="viewTitle">Watchlist</h1>
+        <h1 id="viewTitle"><span id="viewName">Watchlist</span> <span class="count" id="viewCount">0</span></h1>
         <div class="page-actions">
           <button class="button ghost" id="surpriseButton"><svg class="icon"><use href="#i-sparkle"/></svg>Surprise me</button>
           <button class="button primary" id="addButton"><svg class="icon"><use href="#i-plus"/></svg>Add title</button>
@@ -111,64 +112,34 @@
       </div>
     </dialog>
 
-    <dialog id="settingsDialog" class="sheet" aria-labelledby="settingsHeading">
-      <form id="settingsForm">
-        <div class="dialog-head">
-          <h2 id="settingsHeading">Settings</h2>
-          <button class="icon-button" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
-        </div>
-        <div class="dialog-body">
-          <p class="hint">Everything is stored only in this browser. Version <span id="appVersion"></span></p>
-          <label class="field">OMDb API key
-            <input id="omdbKey" type="password" autocomplete="off" placeholder="Using the built-in Moveez key">
-            <small>Optional. Get your own at omdbapi.com if the shared key hits its daily limit.</small>
-          </label>
-          <fieldset class="field-group">
-            <legend>Surprise me (optional)</legend>
-            <label class="field">LLM endpoint<input id="llmEndpoint" type="url" placeholder="https://api.openai.com/v1/chat/completions"></label>
-            <label class="field">LLM API key<input id="llmKey" type="password" autocomplete="off"></label>
-            <label class="field">LLM model<input id="llmModel" placeholder="gpt-4o-mini"></label>
-          </fieldset>
-        </div>
-        <div class="dialog-foot">
-          <button class="button danger-text" id="clearData" type="button">Clear local data</button>
-          <button class="button primary" type="submit">Save settings</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="ratingDialog" class="sheet" aria-labelledby="ratingTitle">
-      <form id="ratingForm">
-        <div class="dialog-head">
-          <h2 id="ratingTitle"></h2>
-          <button class="icon-button" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
-        </div>
-        <div class="dialog-body">
-          <p class="hint">How many popcorn bags does it deserve?</p>
-          <div id="popcornRating" class="popcorn-rating" role="radiogroup" aria-label="Your rating"></div>
-          <label class="field">Watched on<input id="watchedDate" type="date"></label>
-        </div>
-        <div class="dialog-foot">
-          <button class="button primary block" type="submit">Add to binge history</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="editDialog" class="sheet" aria-labelledby="editTitle">
-      <form id="editForm">
-        <div class="dialog-head">
-          <h2 id="editTitle"></h2>
-          <button class="icon-button" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
-        </div>
-        <div class="dialog-body">
-          <label class="field">Age rating (FSK)<select id="editFsk"></select></label>
-          <h4 class="field-title">Where to watch</h4>
-          <div id="editProviders" class="toggle-chips"></div>
-        </div>
-        <div class="dialog-foot">
-          <button class="button primary block" type="submit">Save</button>
-        </div>
-      </form>
+    <!-- Built exactly like the add dialog (full-height sheet, no <form>), which works on the iPhone. -->
+    <dialog id="settingsDialog" class="sheet tall" aria-labelledby="settingsHeading">
+      <div class="dialog-head">
+        <h2 id="settingsHeading">Settings</h2>
+        <button class="icon-button" type="button" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="dialog-body">
+        <p class="hint">Everything is stored only on this device. Version <span id="appVersion"></span></p>
+        <label class="field">TMDB API key
+          <input id="tmdbKey" type="password" autocomplete="off" placeholder="Using the built-in key, if any">
+          <small id="tmdbStatus"></small>
+          <small>Streaming offers by JustWatch via TMDB, cinema programmes via kinoprogramm.com.</small>
+        </label>
+        <label class="field">OMDb API key
+          <input id="omdbKey" type="password" autocomplete="off" placeholder="Using the built-in Moveez key">
+          <small>Optional. Get your own at omdbapi.com if the shared key hits its daily limit.</small>
+        </label>
+        <fieldset class="field-group">
+          <legend>Surprise me (optional)</legend>
+          <label class="field">LLM endpoint<input id="llmEndpoint" type="url" placeholder="https://api.openai.com/v1/chat/completions"></label>
+          <label class="field">LLM API key<input id="llmKey" type="password" autocomplete="off"></label>
+          <label class="field">LLM model<input id="llmModel" placeholder="gpt-4o-mini"></label>
+        </fieldset>
+      </div>
+      <div class="dialog-foot">
+        <button class="button danger-text" id="clearData" type="button">Clear local data</button>
+        <button class="button primary" id="saveSettings" type="button">Save settings</button>
+      </div>
     </dialog>
 
     <script src="app.js?v=__BUILD__"></script>

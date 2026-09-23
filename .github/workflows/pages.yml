@@ -3,6 +3,9 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+  # Refreshes the cinema programmes (data/cinemas.json) four times a day.
+  schedule:
+    - cron: "23 */6 * * *"
 permissions:
   contents: read
   pages: write
@@ -29,8 +32,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Stamp build version
-        run: sed -i "s/__BUILD__/${GITHUB_SHA::7}/g" sw.js app.js index.html
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch cinema programmes
+        # A failing source must not block the deployment; the app simply shows no cinemas then.
+        run: mkdir -p data && (node scripts/cinemas.mjs > data/cinemas.json || rm -f data/cinemas.json)
+      - name: Stamp build version and keys
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: |
+          sed -i "s/__BUILD__/${GITHUB_SHA::7}/g" sw.js app.js index.html
+          sed -i "s/__TMDB_KEY__/${TMDB_API_KEY}/g" app.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
