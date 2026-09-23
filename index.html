@@ -29,17 +29,12 @@
         <button class="surprise-button" id="surpriseButton"><span>✦</span> Surprise me</button>
       </section>
 
-      <nav class="tabs" aria-label="List views">
-        <button class="tab active" data-view="watchlist">Watchlist <b id="watchCount">0</b></button>
-        <button class="tab" data-view="binged">Binged <b id="bingeCount">0</b></button>
-      </nav>
-
       <section class="toolbar">
         <label class="search">
           <span aria-hidden="true">⌕</span>
           <input id="searchInput" type="search" placeholder="Search your titles" autocomplete="off">
         </label>
-        <button class="add-button" id="addButton">＋ Add title</button>
+        <button class="add-button" id="addButton">＋ Browse catalogue</button>
       </section>
 
       <section class="filters" aria-label="Filter titles">
@@ -58,10 +53,11 @@
 
     <dialog id="titleDialog">
       <form method="dialog" id="titleForm">
-        <div class="dialog-heading"><div><p class="eyebrow">NEW ENTRY</p><h2>Add a title</h2></div><button class="close-button" value="cancel" aria-label="Close">×</button></div>
-        <label>Search a movie or series<input id="lookupInput" type="search" placeholder="e.g. Dune: Part Two" autocomplete="off"></label>
+        <div class="dialog-heading"><div><p class="eyebrow">ROTTEN TOMATOES-READY CATALOGUE</p><h2>Browse titles</h2></div><button class="close-button" value="cancel" aria-label="Close">×</button></div>
+        <p class="muted catalogue-note">Search the catalogue, choose a result, and Moveez imports its poster, format, year, genres, and available ratings automatically.</p>
+        <label>Search catalogue<input id="lookupInput" type="search" placeholder="e.g. Dune: Part Two" autocomplete="off"></label>
         <div id="lookupResults" class="lookup-results"></div>
-        <div class="manual-fields">
+        <div class="manual-fields" hidden>
           <label>Title<input id="titleName" required placeholder="Title"></label>
           <div class="two-columns"><label>Format<select id="titleType"><option value="movie">Movie</option><option value="series">TV series</option></select></label><label>Year<input id="titleYear" inputmode="numeric" placeholder="2026"></label></div>
           <div class="two-columns"><label>IMDB rating<input id="imdbRating" type="number" min="0" max="10" step="0.1" placeholder="8.0"></label><label>RT viewer %<input id="rtRating" type="number" min="0" max="100" placeholder="92"></label></div>
@@ -70,9 +66,14 @@
           <label class="check-row"><span><input type="checkbox" id="cinemaNow"> Currently in cinema</span><select id="cinema"><option>Filmpalast Bautzen</option><option>CinemaxX Dresden</option><option>UCI Dresden</option></select></label>
           <label>Poster URL <input id="posterUrl" type="url" placeholder="Optional image URL"></label>
         </div>
-        <button class="primary-button" value="default">Save to watchlist</button>
+        <button class="primary-button" id="catalogueSaveButton" type="button" disabled>Add selected title to watchlist</button>
       </form>
     </dialog>
+
+    <nav class="bottom-nav" aria-label="Pages">
+      <button class="bottom-tab active" data-view="watchlist"><span>▣</span><strong>Watchlist</strong><b id="watchCount">0</b></button>
+      <button class="bottom-tab" data-view="binged"><span>🍿</span><strong>Binged</strong><b id="bingeCount">0</b></button>
+    </nav>
 
     <dialog id="settingsDialog">
       <form method="dialog" id="settingsForm">

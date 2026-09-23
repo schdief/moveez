@@ -12,13 +12,13 @@ The repository root now contains the GitHub Pages version of Moveez. It is a mob
 
 ### Design and implementation plan
 
-1. **Single app shell:** two focused views (Watchlist and Binged), responsive cards, search, format/genre/service filters, and a compact add-title flow.
+1. **Single app shell:** two focused pages (Watchlist and Binged) reached through a fixed iPhone-style bottom navigation, responsive cards, search, format/genre/service filters, and a catalogue picker.
 2. **Local-first data:** titles, cinema selection, services, watched dates, and popcorn ratings are stored in browser `localStorage`, so the app works without a server and can be installed on iOS.
-3. **Optional enrichment:** add an OMDb key in Settings for title lookup and IMDb metadata. Rotten Tomatoes viewer scores remain editable because the public RT API is not browser-safe.
+3. **Catalogue import:** use Browse catalogue to search a title provider and import the selected title automatically; no manual title form is required. The current browser-safe implementation uses OMDb search/detail responses, including IMDb ratings and any Rotten Tomatoes viewer score that the response exposes.
 4. **Personal discovery:** “Surprise me” uses an optional OpenAI-compatible LLM endpoint configured in Settings; without one it chooses an unseen title already on the list.
 5. **Pages delivery:** `.github/workflows/pages.yml` publishes the repository root and `sw.js` caches the app shell for offline use.
 
-Cinema schedules and streaming availability are represented as user-selectable fields for now. Live availability requires provider-specific APIs, location permissions, and an intermediary backend; those are intentionally left as future native/backend features rather than pretending the static PWA has current data.
+Rotten Tomatoes does not provide a supported public browser catalogue API, so the PWA does not scrape RT pages or claim live RT coverage. A future backend/provider integration can replace the catalogue adapter with licensed RT data. Cinema schedules and streaming availability are represented as user-selectable fields for now; live availability requires provider-specific APIs, location permissions, and an intermediary backend.
 
 The test deployment will be available at `https://schdief.github.io/moveez/` after the Pages workflow completes.
 

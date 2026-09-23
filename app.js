@@ -5,6 +5,7 @@ let titles = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
 let settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
 let currentView = "watchlist";
 let selectedRating = 0;
+let selectedCatalogueTitle = null;
 const $ = id => document.getElementById(id);
 
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(titles)); render(); }
@@ -59,7 +60,10 @@ async function lookup(query) {
 async function loadLookup(id) {
   try {
     const response = await fetch(`https://www.omdbapi.com/?apikey=${encodeURIComponent(settings.omdbKey)}&i=${encodeURIComponent(id)}&plot=short`);
-    fillTitle(await response.json());
+    selectedCatalogueTitle = await response.json();
+    fillTitle(selectedCatalogueTitle);
+    $("catalogueSaveButton").disabled = selectedCatalogueTitle.Response === "False";
+    $("lookupResults").querySelectorAll(".lookup-result").forEach(result => result.classList.toggle("selected", result.dataset.imdb === id));
   } catch (error) { showStatus("The title details could not be loaded.", "error"); }
 }
 
@@ -86,14 +90,20 @@ function addTitle(event) {
   titles.unshift(entry); save(); $("titleDialog").close(); clearForm(); showStatus(`“${name}” added to your watchlist.`, "success");
 }
 
+function addSelectedCatalogueTitle() {
+  if (!selectedCatalogueTitle || selectedCatalogueTitle.Response === "False") return;
+  addTitle({ preventDefault() {} });
+}
+
 function markWatched(id) { const title = titles.find(item => item.id === id); if (!title) return; $("ratingTitle").textContent = title.name; $("watchedDate").value = new Date().toISOString().slice(0, 10); selectedRating = 0; renderPopcorn(); $("ratingDialog").dataset.id = id; openDialog($("ratingDialog")); }
 function renderPopcorn() { $("popcornRating").innerHTML = [1, 2, 3, 4, 5].map(value => `<button type="button" class="${value <= selectedRating ? "selected" : ""}" data-rating="${value}" aria-label="${value} popcorn bags">🍿</button>`).join(""); }
 function saveRating(event) { event.preventDefault(); const title = titles.find(item => item.id === $("ratingDialog").dataset.id); if (!title) return; title.seen = true; title.seenOn = $("watchedDate").value || new Date().toISOString(); title.userRating = selectedRating; save(); $("ratingDialog").close(); showStatus("Added to your binge history.", "success"); }
 
-document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => { currentView = tab.dataset.view; document.querySelectorAll(".tab").forEach(item => item.classList.toggle("active", item === tab)); render(); }));
+document.querySelectorAll(".bottom-tab").forEach(tab => tab.addEventListener("click", () => { currentView = tab.dataset.view; document.querySelectorAll(".bottom-tab").forEach(item => item.classList.toggle("active", item === tab)); render(); window.scrollTo({ top: 0, behavior: "smooth" }); }));
 ["searchInput", "typeFilter", "genreFilter", "serviceFilter"].forEach(id => $(id).addEventListener(id === "searchInput" ? "input" : "change", render));
-$("addButton").addEventListener("click", () => { clearForm(); openDialog($("titleDialog")); });
+$("addButton").addEventListener("click", () => { clearForm(); selectedCatalogueTitle = null; $("catalogueSaveButton").disabled = true; if (!settings.omdbKey) showStatus("Add an OMDb key in Settings to browse the catalogue.", "error"); openDialog($("titleDialog")); });
 $("titleForm").addEventListener("submit", addTitle); $("surpriseButton").addEventListener("click", surpriseMe);
+$("catalogueSaveButton").addEventListener("click", addSelectedCatalogueTitle);
 $("settingsButton").addEventListener("click", () => { ["omdbKey", "llmEndpoint", "llmKey", "llmModel"].forEach(id => $(id).value = settings[id] || ""); openDialog($("settingsDialog")); });
 $("settingsForm").addEventListener("submit", event => { event.preventDefault(); ["omdbKey", "llmEndpoint", "llmKey", "llmModel"].forEach(id => settings[id] = $(id).value.trim()); localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); $("settingsDialog").close(); showStatus("Settings saved on this device.", "success"); });
 $("saveRatingButton").addEventListener("click", () => saveRating({ preventDefault() {} }));
